@@ -123,7 +123,7 @@ export default function ScanScreen() {
         mimeType = 'image/jpeg'
       }
       const res = await scanAPI.scanCoin(imageData, mimeType)
-      const result = res.data
+      const result = res.data?.result || res.data
       navigate('/scan/result', { state: { result, imageBase64: base64DataUrl } })
     } catch (err) {
       if (err?.response?.status === 402) {
