@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Camera, Image, Zap, ZapOff, AlertCircle } from 'lucide-react'
+import { Camera, Image, Zap, ZapOff, AlertCircle, Upload } from 'lucide-react'
 import { scanAPI } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import PaywallModal from '../../components/UI/PaywallModal'
@@ -189,15 +189,23 @@ export default function ScanScreen() {
       {/* Camera error state */}
       {cameraError && (
         <div className="absolute inset-0 bg-[#0F0F0F] flex flex-col items-center justify-center px-8 text-center">
-          <AlertCircle size={48} className="text-gray-600 mb-4" />
-          <p className="text-white font-body text-base mb-2">Camera Unavailable</p>
-          <p className="text-gray-500 font-body text-sm mb-6">{cameraError}</p>
+          <div className="w-20 h-20 rounded-full bg-[#D4A017]/20 flex items-center justify-center mb-5">
+            <Upload size={36} className="text-[#D4A017]" />
+          </div>
+          <h2 className="text-white font-display font-bold text-xl mb-2">Upload a Coin Photo</h2>
+          <p className="text-gray-400 font-body text-sm mb-8 max-w-xs leading-relaxed">
+            Take a clear photo of your coin on a dark background with good lighting, then upload it here.
+          </p>
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="bg-[#D4A017] text-black font-bold px-6 py-3 rounded-xl font-body"
+            className="w-full bg-[#D4A017] text-black font-bold py-4 rounded-2xl font-body text-base flex items-center justify-center gap-2"
           >
-            Upload Image Instead
+            <Upload size={20} />
+            Choose from Camera Roll
           </button>
+          {cameraError && (
+            <p className="text-gray-600 text-xs font-body mt-4">{cameraError}</p>
+          )}
         </div>
       )}
 
@@ -242,27 +250,18 @@ export default function ScanScreen() {
 
       {/* Bottom controls */}
       {!cameraError && (
-        <div className="absolute bottom-0 left-0 right-0 pb-24 px-8 z-20">
+        <div className="absolute bottom-0 left-0 right-0 pb-24 px-6 z-20 space-y-4">
+          {/* Upload from camera roll — primary big button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full flex items-center justify-center gap-3 bg-white/15 backdrop-blur-md border border-white/30 text-white font-body font-semibold py-3.5 rounded-2xl active:scale-95 transition-transform"
+          >
+            <Upload size={18} />
+            Upload from Camera Roll
+          </button>
+
+          {/* Camera controls row */}
           <div className="flex items-center justify-between">
-            {/* Gallery */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm border border-white/20 flex items-center justify-center active:scale-95 transition-transform"
-              aria-label="Upload from gallery"
-            >
-              <Image size={20} className="text-white" />
-            </button>
-
-            {/* Capture */}
-            <button
-              onClick={handleCapture}
-              disabled={isScanning || !cameraReady}
-              className="w-20 h-20 rounded-full bg-[#D4A017] flex items-center justify-center shadow-2xl shadow-[#D4A017]/40 active:scale-95 transition-transform disabled:opacity-60"
-              aria-label="Capture coin"
-            >
-              <Camera size={28} className="text-black" strokeWidth={2.5} />
-            </button>
-
             {/* Flash */}
             <button
               onClick={toggleFlash}
@@ -275,6 +274,19 @@ export default function ScanScreen() {
                 <ZapOff size={20} className="text-white" />
               )}
             </button>
+
+            {/* Capture */}
+            <button
+              onClick={handleCapture}
+              disabled={isScanning || !cameraReady}
+              className="w-20 h-20 rounded-full bg-[#D4A017] flex items-center justify-center shadow-2xl shadow-[#D4A017]/40 active:scale-95 transition-transform disabled:opacity-60"
+              aria-label="Capture coin"
+            >
+              <Camera size={28} className="text-black" strokeWidth={2.5} />
+            </button>
+
+            {/* Placeholder to keep layout balanced */}
+            <div className="w-12 h-12" />
           </div>
         </div>
       )}
