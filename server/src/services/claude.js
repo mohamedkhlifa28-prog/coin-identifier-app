@@ -9,13 +9,19 @@ function getClient() {
 }
 
 /**
- * Safely parse a JSON string that may be wrapped in markdown code fences.
+ * Safely parse a JSON string that may be wrapped in markdown code fences
+ * or have text before/after the JSON object.
  */
 function parseJsonResponse(text) {
   let cleaned = text.trim();
   // Strip markdown code fences if present
   cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  return JSON.parse(cleaned);
+  // Try direct parse first
+  try { return JSON.parse(cleaned); } catch (_) {}
+  // Try to extract first JSON object from the text
+  const match = cleaned.match(/\{[\s\S]*\}/);
+  if (match) return JSON.parse(match[0]);
+  throw new Error('No valid JSON found in response: ' + cleaned.slice(0, 200));
 }
 
 /**
@@ -76,7 +82,7 @@ async function identifyCoin(imageBase64, mimeType) {
             },
             {
               type: 'text',
-              text: 'Please identify this coin and return the JSON object as instructed.',
+              text: 'Identify this coin. Output ONLY the JSON object, nothing else.',
             },
           ],
         },
@@ -84,6 +90,7 @@ async function identifyCoin(imageBase64, mimeType) {
     });
 
     const text = response.content[0].text;
+    console.log('[identifyCoin] raw response (first 300 chars):', text.slice(0, 300));
     return parseJsonResponse(text);
   } catch (err) {
     console.error('Claude identifyCoin error:', err.message);
