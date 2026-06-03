@@ -50,8 +50,8 @@ export const userAPI = {
 
 // Scan API
 export const scanAPI = {
-  scanCoin: (imageBase64) =>
-    apiClient.post('/scan', { image: imageBase64 }),
+  scanCoin: (imageBase64, mimeType = 'image/jpeg') =>
+    apiClient.post('/scan', { imageBase64, mimeType }),
   gradeCoin: (imageBase64, coinId) =>
     apiClient.post('/scan/grade', { image: imageBase64, coinId }),
   detectErrors: (imageBase64, coinId) =>

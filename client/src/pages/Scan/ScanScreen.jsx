@@ -79,24 +79,52 @@ export default function ScanScreen() {
     }
   }, [flashOn])
 
-  // Capture frame from video
+  // Capture frame from video (capped at 800px)
   const captureFrame = useCallback(() => {
     if (!videoRef.current || !canvasRef.current) return null
     const video = videoRef.current
     const canvas = canvasRef.current
-    canvas.width = video.videoWidth || 1280
-    canvas.height = video.videoHeight || 720
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(video, 0, 0)
-    return canvas.toDataURL('image/jpeg', 0.85)
+    const MAX = 800
+    let w = video.videoWidth || 1280
+    let h = video.videoHeight || 720
+    if (w > MAX || h > MAX) {
+      if (w > h) { h = Math.round(h * MAX / w); w = MAX }
+      else { w = Math.round(w * MAX / h); h = MAX }
+    }
+    canvas.width = w
+    canvas.height = h
+    canvas.getContext('2d').drawImage(video, 0, 0, w, h)
+    return canvas.toDataURL('image/jpeg', 0.8)
+  }, [])
+
+  // Resize + compress a base64 data URL to max 800px, returns { imageData, mimeType }
+  const prepareImage = useCallback((base64DataUrl) => {
+    return new Promise((resolve) => {
+      const img = new window.Image()
+      img.onload = () => {
+        const MAX = 800
+        let { width, height } = img
+        if (width > MAX || height > MAX) {
+          if (width > height) { height = Math.round(height * MAX / width); width = MAX }
+          else { width = Math.round(width * MAX / height); height = MAX }
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = width
+        canvas.height = height
+        canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+        const compressed = canvas.toDataURL('image/jpeg', 0.8)
+        resolve({ imageData: compressed.split(',')[1], mimeType: 'image/jpeg' })
+      }
+      img.src = base64DataUrl
+    })
   }, [])
 
   // Send to API
   const sendToAPI = useCallback(async (base64) => {
     setIsScanning(true)
     try {
-      const imageData = base64.includes(',') ? base64.split(',')[1] : base64
-      const res = await scanAPI.scanCoin(imageData)
+      const { imageData, mimeType } = await prepareImage(base64)
+      const res = await scanAPI.scanCoin(imageData, mimeType)
       const result = res.data
       navigate('/scan/result', { state: { result, imageBase64: base64 } })
     } catch (err) {
@@ -110,7 +138,7 @@ export default function ScanScreen() {
     } finally {
       setIsScanning(false)
     }
-  }, [navigate])
+  }, [navigate, prepareImage])
 
   // Camera capture
   const handleCapture = useCallback(async () => {
