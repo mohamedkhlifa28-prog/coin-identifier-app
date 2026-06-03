@@ -70,6 +70,10 @@ router.get('/stats', authMiddleware, (req, res) => {
   const currentMonth = new Date().toISOString().slice(0, 7);
   const scanCountThisMonth = user.scan_month === currentMonth ? (user.scan_count_month || 0) : 0;
 
+  const totalCoins = db.prepare('SELECT COUNT(*) as count FROM user_coins WHERE user_id = ?').get(req.user.id).count;
+  const totalScans = db.prepare('SELECT COUNT(*) as count FROM scans WHERE user_id = ?').get(req.user.id).count;
+  const totalPosts = db.prepare('SELECT COUNT(*) as count FROM posts WHERE user_id = ?').get(req.user.id).count;
+
   return res.json({
     xp: user.xp,
     level: user.level,
@@ -77,6 +81,9 @@ router.get('/stats', authMiddleware, (req, res) => {
     scanCountThisMonth,
     badges,
     subscriptionTier: user.subscription_tier,
+    totalCoins,
+    totalScans,
+    totalPosts,
   });
 });
 

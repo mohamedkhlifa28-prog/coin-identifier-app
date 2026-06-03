@@ -20,7 +20,7 @@ function WeeklyChallenge({ challenge }) {
     if (!challenge) return
     const tick = () => {
       const now = new Date()
-      const end = new Date(challenge.endsAt)
+      const end = new Date(challenge.endsAt || challenge.endDate)
       const diff = end - now
       if (diff <= 0) { setTimeLeft('Ended'); return }
       const d = Math.floor(diff / 86400000)

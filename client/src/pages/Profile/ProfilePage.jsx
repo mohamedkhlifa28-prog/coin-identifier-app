@@ -107,10 +107,10 @@ export default function ProfilePage() {
 
     userAPI.getBadges()
       .then((res) => {
-        const all = res.data.allBadges || res.data.badges || []
-        const earned = res.data.earnedBadges || res.data.earned || []
-        setBadges(all)
-        setEarnedBadgeIds(Array.isArray(earned) ? earned.map((b) => b.badge_id || b.id) : [])
+        const earned = res.data.earned || []
+        const available = res.data.available || []
+        setBadges([...earned, ...available])
+        setEarnedBadgeIds(earned.map((b) => b.id))
       })
       .catch(() => {})
 
