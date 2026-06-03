@@ -17,12 +17,6 @@
     "start": "NODE_ENV=production node server/src/app.js"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
-    "localtunnel": "^2.0.2"
-  },
-  "dependencies": {
-    "@ngrok/ngrok": "^1.7.0",
-    "@railway/cli": "^4.66.1",
-    "tunnelmole": "^2.4.0"
+    "concurrently": "^8.2.2"
   }
 }
