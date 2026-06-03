@@ -28,9 +28,13 @@ const server = http.createServer(app);
 // ----------------------------------------------------------------
 // Socket.io
 // ----------------------------------------------------------------
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? true  // allow all origins in production (served from same domain)
+  : ['http://localhost:5173', 'http://localhost:3001'];
+
 const io = new Server(server, {
   cors: {
-    origin: ['http://localhost:5173', 'http://localhost:3001'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -62,7 +66,7 @@ app.set('emitNotification', emitNotification);
 // Middleware
 // ----------------------------------------------------------------
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3001'],
+  origin: allowedOrigins,
   credentials: true,
 }));
 
@@ -74,6 +78,12 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Static files from uploads directory
 app.use('/uploads', express.static(uploadsDir));
+
+// Serve React production build in production
+const clientBuildPath = path.resolve(__dirname, '../../client/dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientBuildPath)) {
+  app.use(express.static(clientBuildPath));
+}
 
 // ----------------------------------------------------------------
 // Multer configuration (for file uploads)
@@ -146,10 +156,16 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Route not found' });
-});
+// In production, serve index.html for all non-API routes (SPA fallback)
+if (process.env.NODE_ENV === 'production' && fs.existsSync(clientBuildPath)) {
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+} else {
+  app.use((req, res) => {
+    res.status(404).json({ error: 'Route not found' });
+  });
+}
 
 // Error handler
 app.use((err, req, res, next) => {

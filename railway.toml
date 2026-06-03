@@ -1,0 +1,11 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install && cd client && npm install && npm run build"
+
+[deploy]
+startCommand = "node server/src/app.js"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+[[services]]
+name = "coinvault"
