@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    background-color: #0F0F0F;
+    color: #F5F5F5;
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input, textarea {
+    font-size: 16px; /* prevent zoom on iOS */
+  }
+}
+
+@layer utilities {
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .text-gold {
+    color: #D4A017;
+  }
+
+  .border-gold {
+    border-color: #D4A017;
+  }
+
+  .bg-gold {
+    background-color: #D4A017;
+  }
+}
+
+/* Coin flip animation */
+.coin-flip-container {
+  perspective: 1000px;
+}
+.coin-flip-inner {
+  transition: transform 0.8s;
+  transform-style: preserve-3d;
+}
+.coin-flip-inner.flipped {
+  transform: rotateY(180deg);
+}
