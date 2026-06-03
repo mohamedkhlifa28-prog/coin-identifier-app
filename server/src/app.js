@@ -156,6 +156,25 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+// AI connectivity diagnostic
+app.get('/api/health/ai', async (_req, res) => {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return res.status(500).json({ error: 'ANTHROPIC_API_KEY not set' });
+
+  try {
+    const Anthropic = require('@anthropic-ai/sdk');
+    const client = new Anthropic({ apiKey: key });
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 10,
+      messages: [{ role: 'user', content: 'Say ok' }],
+    });
+    res.json({ status: 'ok', keyPrefix: key.slice(0, 10) + '...', response: response.content[0].text });
+  } catch (err) {
+    res.status(500).json({ error: err.message, keyPrefix: key.slice(0, 10) + '...' });
+  }
+});
+
 // In production, serve index.html for all non-API routes (SPA fallback)
 if (process.env.NODE_ENV === 'production' && fs.existsSync(clientBuildPath)) {
   app.get('*', (_req, res) => {
