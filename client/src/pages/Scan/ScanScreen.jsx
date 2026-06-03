@@ -97,48 +97,45 @@ export default function ScanScreen() {
     return canvas.toDataURL('image/jpeg', 0.8)
   }, [])
 
-  // Resize + compress a base64 data URL to max 800px, returns { imageData, mimeType }
-  const prepareImage = useCallback((base64DataUrl) => {
-    return new Promise((resolve) => {
-      const img = new window.Image()
-      img.onload = () => {
-        const MAX = 800
-        let { width, height } = img
-        if (width > MAX || height > MAX) {
-          if (width > height) { height = Math.round(height * MAX / width); width = MAX }
-          else { width = Math.round(width * MAX / height); height = MAX }
-        }
-        const canvas = document.createElement('canvas')
-        canvas.width = width
-        canvas.height = height
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height)
-        const compressed = canvas.toDataURL('image/jpeg', 0.8)
-        resolve({ imageData: compressed.split(',')[1], mimeType: 'image/jpeg' })
-      }
-      img.src = base64DataUrl
-    })
-  }, [])
-
   // Send to API
-  const sendToAPI = useCallback(async (base64) => {
+  const sendToAPI = useCallback(async (base64DataUrl) => {
     setIsScanning(true)
     try {
-      const { imageData, mimeType } = await prepareImage(base64)
+      // Extract mimeType and raw base64 from data URL
+      let imageData, mimeType
+      if (base64DataUrl.startsWith('data:')) {
+        const [header, data] = base64DataUrl.split(',')
+        mimeType = header.match(/data:([^;]+)/)?.[1] || 'image/jpeg'
+        imageData = data
+        // Convert non-jpeg to jpeg for Anthropic compatibility
+        if (mimeType !== 'image/jpeg' && mimeType !== 'image/png' && mimeType !== 'image/gif' && mimeType !== 'image/webp') {
+          const img = new window.Image()
+          await new Promise(resolve => { img.onload = resolve; img.src = base64DataUrl })
+          const c = document.createElement('canvas')
+          c.width = img.width; c.height = img.height
+          c.getContext('2d').drawImage(img, 0, 0)
+          const jpeg = c.toDataURL('image/jpeg', 0.85)
+          imageData = jpeg.split(',')[1]
+          mimeType = 'image/jpeg'
+        }
+      } else {
+        imageData = base64DataUrl
+        mimeType = 'image/jpeg'
+      }
       const res = await scanAPI.scanCoin(imageData, mimeType)
       const result = res.data
-      navigate('/scan/result', { state: { result, imageBase64: base64 } })
+      navigate('/scan/result', { state: { result, imageBase64: base64DataUrl } })
     } catch (err) {
       if (err?.response?.status === 402) {
         setPaywallOpen(true)
       } else {
-        const msg =
-          err?.response?.data?.error || 'Scan failed. Please try again.'
+        const msg = err?.response?.data?.error || 'Scan failed. Please try again.'
         alert(msg)
       }
     } finally {
       setIsScanning(false)
     }
-  }, [navigate, prepareImage])
+  }, [navigate])
 
   // Camera capture
   const handleCapture = useCallback(async () => {
