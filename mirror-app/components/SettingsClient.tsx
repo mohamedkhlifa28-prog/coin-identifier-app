@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect, FormEvent } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { PlanBadge } from './PlanBadge'
@@ -19,10 +19,9 @@ interface SettingsClientProps {
   plan: Plan
 }
 
-const SECTION_IDS = ['profile', 'mirror', 'voice', 'sharing', 'subscription', 'notifications', 'danger']
-
-export function SettingsClient({ user, voiceProfile, shares: initialShares, hasVoiceClone, plan }: SettingsClientProps) {
+export function SettingsClient({ user, voiceProfile, shares: initialShares, hasVoiceClone, plan: initialPlan }: SettingsClientProps) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [name, setName] = useState(user.name ?? '')
   const [saving, setSaving] = useState(false)
   const [shares, setShares] = useState<SharedMirror[]>(initialShares)
@@ -33,9 +32,44 @@ export function SettingsClient({ user, voiceProfile, shares: initialShares, hasV
   const [pushSupported, setPushSupported] = useState(false)
   const [pushEnabled, setPushEnabled] = useState(false)
   const [pushLoading, setPushLoading] = useState(false)
+  const [plan, setPlan] = useState<Plan>(initialPlan)
+  const [upgradePolling, setUpgradePolling] = useState(false)
   const audioInputRef = useRef<HTMLInputElement>(null)
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+
+  // Detect post-Stripe-checkout redirect and poll until plan is updated
+  useEffect(() => {
+    const upgraded = searchParams.get('upgraded') as Plan | null
+    if (!upgraded || upgraded === plan) return
+
+    setUpgradePolling(true)
+    showMsg(`Verifying your ${upgraded} upgrade…`)
+
+    let attempts = 0
+    const MAX = 8
+    const interval = setInterval(async () => {
+      attempts++
+      const { data } = await supabase.from('users').select('plan').eq('id', user.id).single()
+      if (data?.plan && data.plan !== 'free' && data.plan !== plan) {
+        clearInterval(interval)
+        setUpgradePolling(false)
+        setPlan(data.plan as Plan)
+        showMsg(`You're now on the ${data.plan} plan!`)
+        // Clean up the URL param without a full navigation
+        const url = new URL(window.location.href)
+        url.searchParams.delete('upgraded')
+        window.history.replaceState({}, '', url.toString())
+      } else if (attempts >= MAX) {
+        clearInterval(interval)
+        setUpgradePolling(false)
+        showMsg('Plan update pending — refresh in a moment if it doesn\'t appear.')
+      }
+    }, 2000)
+
+    return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return
@@ -193,6 +227,12 @@ export function SettingsClient({ user, voiceProfile, shares: initialShares, hasV
   async function deleteAccount() {
     if (!confirm('Delete your Mirror account permanently? All data will be lost.')) return
     if (!confirm('Are you absolutely sure? This is irreversible.')) return
+    const res = await fetch('/api/account/delete', { method: 'DELETE' })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      showMsg(d.error ?? 'Failed to delete account.', 'error')
+      return
+    }
     await supabase.auth.signOut()
     router.push('/')
   }
@@ -351,6 +391,9 @@ export function SettingsClient({ user, voiceProfile, shares: initialShares, hasV
             <span className="text-sm text-[#888888]">
               {plan === 'free' ? 'Free plan' : plan === 'pro' ? '$9.99/month' : '$24.99/month'}
             </span>
+            {upgradePolling && (
+              <span className="text-xs text-[#a78bfa] animate-pulse">Verifying upgrade…</span>
+            )}
           </div>
           {plan === 'free' ? (
             <Link href="/pricing" className="btn-primary text-sm px-5 py-2 inline-block">

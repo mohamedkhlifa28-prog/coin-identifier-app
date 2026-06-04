@@ -121,7 +121,7 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
     setStreaming(true)
     setStreamingContent('')
 
-    const history = messages.map((m) => ({ role: m.role, content: m.content }))
+    const history = messages.slice(-20).map((m) => ({ role: m.role, content: m.content }))
 
     try {
       const res = await fetch('/api/chat', {

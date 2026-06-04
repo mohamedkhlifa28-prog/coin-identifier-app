@@ -49,7 +49,7 @@ export function SharedMirrorClient({ slug, ownerName }: SharedMirrorClientProps)
     setStreaming(true)
     setStreamingContent('')
 
-    const history = messages.map((m) => ({ role: m.role, content: m.content }))
+    const history = messages.slice(-10).map((m) => ({ role: m.role, content: m.content }))
 
     try {
       const res = await fetch(`/api/mirror/${slug}/chat`, {

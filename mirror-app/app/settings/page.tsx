@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
@@ -34,12 +35,14 @@ export default async function SettingsPage() {
   if (!userData) redirect('/login')
 
   return (
-    <SettingsClient
-      user={userData}
-      voiceProfile={profileData}
-      shares={shares ?? []}
-      hasVoiceClone={!!voiceClone}
-      plan={(userData.plan ?? 'free') as Plan}
-    />
+    <Suspense>
+      <SettingsClient
+        user={userData}
+        voiceProfile={profileData}
+        shares={shares ?? []}
+        hasVoiceClone={!!voiceClone}
+        plan={(userData.plan ?? 'free') as Plan}
+      />
+    </Suspense>
   )
 }

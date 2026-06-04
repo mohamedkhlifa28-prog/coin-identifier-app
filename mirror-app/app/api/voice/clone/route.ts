@@ -69,9 +69,28 @@ export async function POST(request: NextRequest) {
 
     const { voice_id } = (await elRes.json()) as { voice_id: string }
 
-    // Save voice clone — delete any existing record first, then insert
+    // Fetch existing clone so we can restore it if the new insert fails
+    const { data: prevClone } = await supabase
+      .from('voice_clones')
+      .select('elevenlabs_voice_id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
     await supabase.from('voice_clones').delete().eq('user_id', user.id)
-    await supabase.from('voice_clones').insert({ user_id: user.id, elevenlabs_voice_id: voice_id })
+    const { error: insertError } = await supabase
+      .from('voice_clones')
+      .insert({ user_id: user.id, elevenlabs_voice_id: voice_id })
+
+    if (insertError) {
+      // Restore the previous clone rather than leaving the user with nothing
+      if (prevClone) {
+        await supabase.from('voice_clones').insert({
+          user_id: user.id,
+          elevenlabs_voice_id: prevClone.elevenlabs_voice_id,
+        })
+      }
+      return NextResponse.json({ error: 'Failed to save voice clone' }, { status: 500 })
+    }
 
     return NextResponse.json({ success: true, voice_id })
   } catch (err) {

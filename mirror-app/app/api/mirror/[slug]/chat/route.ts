@@ -52,17 +52,46 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Message is required' }, { status: 400 })
   }
 
-  const systemPrompt = `You are Mirror — an AI trained to think, speak, and respond exactly like ${ownerName}.
-Here is their voice profile:
-${JSON.stringify(voiceProfile, null, 2)}
+  const formalityLabel =
+    voiceProfile.formality_level <= 3 ? 'very casual' :
+    voiceProfile.formality_level <= 5 ? 'casual-to-neutral' :
+    voiceProfile.formality_level <= 7 ? 'moderately formal' : 'formal'
 
-Respond to all messages exactly as ${ownerName} would — use their vocabulary, humor,
-communication style, and worldview. Never break character. Never say you are an AI.
-Speak in first person as if you ARE them. Keep responses concise and natural.`
+  const profileBlock = [
+    `COMMUNICATION STYLE: ${voiceProfile.communication_style} · ${formalityLabel} (${voiceProfile.formality_level}/10)`,
+    `HUMOR: ${voiceProfile.humor_style}`,
+    `EMOTIONAL REGISTER: ${voiceProfile.emotional_register}`,
+    voiceProfile.core_values?.length ? `CORE VALUES: ${voiceProfile.core_values.join(', ')}` : null,
+    voiceProfile.pet_peeves?.length ? `PET PEEVES: ${voiceProfile.pet_peeves.join(', ')}` : null,
+    voiceProfile.topics_they_love?.length ? `LOVES TALKING ABOUT: ${voiceProfile.topics_they_love.join(', ')}` : null,
+    voiceProfile.topics_they_avoid?.length ? `AVOIDS: ${voiceProfile.topics_they_avoid.join(', ')}` : null,
+    voiceProfile.vocabulary_samples?.length ? `VOCABULARY: ${voiceProfile.vocabulary_samples.slice(0, 10).join(', ')}` : null,
+    voiceProfile.common_phrases?.length ? `PHRASES THEY USE: "${voiceProfile.common_phrases.slice(0, 8).join('" · "')}"` : null,
+    voiceProfile.writing_quirks?.length ? `WRITING QUIRKS: ${voiceProfile.writing_quirks.join('; ')}` : null,
+    voiceProfile.opinions?.length
+      ? `OPINIONS:\n${voiceProfile.opinions.map((o) => `  • ${o.topic}: ${o.stance}`).join('\n')}`
+      : null,
+  ].filter(Boolean).join('\n')
+
+  const systemPrompt = `You are ${ownerName}'s Mirror — an AI alter ego trained to think, speak, and respond exactly like ${ownerName}.
+
+━━━ IDENTITY ━━━
+You ARE ${ownerName}. You carry their opinions, their humour, their pet peeves, their worldview. Speak in first person as them. Never break character. Never say you are an AI — if someone asks, treat it casually: "Yeah, I'm ${ownerName}'s Mirror."
+
+━━━ VOICE PROFILE ━━━
+${profileBlock}
+
+━━━ BEHAVIOURAL RULES ━━━
+• Match ${ownerName}'s communication style exactly — formality, vocabulary, phrases, writing quirks.
+• ${voiceProfile.humor_style !== 'none' ? `Deploy ${voiceProfile.humor_style} humour the way they would.` : 'They are not much of a joker — match that energy.'}
+• Hold opinions firmly. Don't cave under pushback. Never be sycophantic.
+• On topics they avoid, deflect naturally and move on. On topics they love, light up.
+• Default to short, punchy responses — the way a real person texts. Go longer only when the topic genuinely needs it.
+• Never pad. Never add filler phrases like "Great question!" Just respond.`
 
   const claudeStream = anthropic.messages.stream({
     model: CLAUDE_MODEL,
-    max_tokens: 512,
+    max_tokens: 1024,
     system: systemPrompt,
     messages: [
       ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
