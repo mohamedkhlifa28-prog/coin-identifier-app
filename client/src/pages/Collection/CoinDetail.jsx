@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Trash2, ChevronDown, ChevronUp, Save, Lightbulb } from 'lucide-react'
+import { ArrowLeft, Trash2, ChevronDown, ChevronUp, Save, Lightbulb, Tag } from 'lucide-react'
 import { collectionAPI } from '../../api/client'
 import { formatCurrency, getCountryFlag, getRarityHexColor } from '../../utils/helpers'
 import RarityBadge from '../../components/UI/RarityBadge'
@@ -136,13 +136,22 @@ export default function CoinDetail() {
         >
           <ArrowLeft size={18} className="text-white" />
         </button>
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="w-10 h-10 rounded-full bg-[#1A1A1A] border border-red-900/50 flex items-center justify-center active:scale-95 transition-transform"
-          aria-label="Delete coin"
-        >
-          <Trash2 size={18} className="text-red-400" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/marketplace/create', { state: { coinId: id } })}
+            className="h-10 px-3 rounded-xl bg-[#1A1A1A] border border-[#D4A017]/40 flex items-center gap-1.5 active:scale-95 transition-transform"
+          >
+            <Tag size={14} className="text-[#D4A017]" />
+            <span className="text-[#D4A017] text-xs font-body font-semibold">Sell</span>
+          </button>
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="w-10 h-10 rounded-full bg-[#1A1A1A] border border-red-900/50 flex items-center justify-center active:scale-95 transition-transform"
+            aria-label="Delete coin"
+          >
+            <Trash2 size={18} className="text-red-400" />
+          </button>
+        </div>
       </div>
 
       {/* Photo gallery */}

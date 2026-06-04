@@ -80,6 +80,8 @@ export const marketplaceAPI = {
   toggleWatchlist: (id) =>
     apiClient.post(`/marketplace/${id}/watch`),
   getWatchlist: () => apiClient.get('/marketplace/watchlist'),
+  buyListing: (id, options = {}) =>
+    apiClient.post(`/marketplace/${id}/buy`, options),
 }
 
 // Feed API
@@ -100,7 +102,7 @@ export const leaderboardAPI = {
 
 // Subscribe API
 export const subscribeAPI = {
-  subscribe: (tier) => apiClient.post('/subscribe', { tier }),
+  subscribe: (tier, options = {}) => apiClient.post('/subscribe', { tier, ...options }),
   getStatus: () => apiClient.get('/subscribe/status'),
   cancel: () => apiClient.post('/subscribe/cancel'),
 }

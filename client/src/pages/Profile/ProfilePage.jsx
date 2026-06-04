@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { LogOut, Crown, Bell, X, Check } from 'lucide-react'
+import { LogOut, Crown, Bell, X, Flame } from 'lucide-react'
 import apiClient, { userAPI, subscribeAPI, leaderboardAPI } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import { formatCurrency, getInitials, calculateProgress } from '../../utils/helpers'
@@ -143,7 +143,10 @@ export default function ProfilePage() {
   const handleUpgrade = async (tier) => {
     setIsUpgrading(true)
     try {
-      const res = await subscribeAPI.subscribe(tier)
+      const res = await subscribeAPI.subscribe(tier, {
+        successUrl: `${window.location.origin}/profile?subscribed=true`,
+        cancelUrl: `${window.location.origin}/profile`,
+      })
       if (res.data.url) {
         window.location.href = res.data.url
       } else if (res.data.success) {
@@ -386,7 +389,6 @@ export default function ProfilePage() {
                 {unreadNotifs > 0 && (
                   <button
                     onClick={() => {
-                      userAPI.updateProfile({}).catch(() => {})
                       apiClient.put('/user/notifications/read-all').catch(() => {})
                       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
                       setUnreadNotifs(0)

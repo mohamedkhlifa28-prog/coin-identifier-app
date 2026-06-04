@@ -7,9 +7,9 @@ import SkeletonCard from '../../components/UI/SkeletonCard'
 import RarityBadge from '../../components/UI/RarityBadge'
 
 function ListingCard({ listing, onClick }) {
-  const seller = listing.seller || {}
-  const initials = getInitials(seller.name || 'Unknown')
-  const imageUrl = listing.photos?.[0] || listing.imageUrl || listing.image_url
+  const sellerName = listing.seller_name || listing.seller?.name || 'Seller'
+  const initials = getInitials(sellerName)
+  const imageUrl = listing.images?.[0] || listing.image_url || listing.imageUrl
 
   return (
     <button
@@ -44,7 +44,7 @@ function ListingCard({ listing, onClick }) {
           <div className="w-5 h-5 rounded-full bg-[#D4A017] flex items-center justify-center shrink-0">
             <span className="text-black text-[8px] font-bold">{initials}</span>
           </div>
-          <span className="text-gray-500 text-[10px] font-body truncate">{seller.name || 'Seller'}</span>
+          <span className="text-gray-500 text-[10px] font-body truncate">{sellerName}</span>
         </div>
       </div>
     </button>

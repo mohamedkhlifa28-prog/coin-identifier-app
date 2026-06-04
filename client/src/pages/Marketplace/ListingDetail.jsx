@@ -23,6 +23,8 @@ export default function ListingDetail() {
   const [showOfferForm, setShowOfferForm] = useState(false)
   const [offers, setOffers] = useState([])
   const [respondingTo, setRespondingTo] = useState(null)
+  const [isBuying, setIsBuying] = useState(false)
+  const [purchaseSuccess, setPurchaseSuccess] = useState(false)
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -32,6 +34,12 @@ export default function ListingDetail() {
         setListing(data)
         setIsWatchlisted(data.isWatchlisted || false)
         setOffers(data.offers || [])
+        // Check if returning from successful Stripe purchase
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('purchased') === 'true') {
+          window.history.replaceState({}, '', window.location.pathname)
+          setPurchaseSuccess(true)
+        }
       } catch (err) {
         setError('Failed to load listing.')
       } finally {
@@ -65,6 +73,27 @@ export default function ListingDetail() {
       setRespondingTo(null)
     }
   }, [id])
+
+  const handleBuyNow = useCallback(async () => {
+    if (!isAuthenticated) {
+      navigate('/auth/login')
+      return
+    }
+    setIsBuying(true)
+    try {
+      const res = await marketplaceAPI.buyListing(id, {
+        successUrl: `${window.location.origin}/marketplace/${id}?purchased=true`,
+        cancelUrl: `${window.location.origin}/marketplace/${id}`,
+      })
+      if (res.data.url) {
+        window.location.href = res.data.url
+      }
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to start checkout. Payment may not be configured yet.')
+    } finally {
+      setIsBuying(false)
+    }
+  }, [id, isAuthenticated, navigate])
 
   const handleMakeOffer = useCallback(async () => {
     if (!isAuthenticated) {
@@ -238,6 +267,14 @@ export default function ListingDetail() {
           </div>
         )}
 
+        {/* Purchase success */}
+        {purchaseSuccess && (
+          <div className="bg-green-900/30 border border-green-700/50 rounded-xl px-4 py-3 flex items-center gap-2">
+            <Check size={16} className="text-green-400" />
+            <p className="text-green-400 text-sm font-body font-semibold">Purchase complete! The seller will be in touch.</p>
+          </div>
+        )}
+
         {/* Offer success */}
         {offerSuccess && (
           <div className="bg-green-900/30 border border-green-700/50 rounded-xl px-4 py-3 flex items-center gap-2">
@@ -358,16 +395,11 @@ export default function ListingDetail() {
               Make Offer
             </button>
             <button
-              onClick={() => {
-                if (!isAuthenticated) {
-                  navigate('/auth/login')
-                  return
-                }
-                alert('Stripe checkout coming soon')
-              }}
-              className="flex-1 bg-[#D4A017] text-black font-bold py-4 rounded-xl font-body text-sm active:scale-[0.98] transition-transform"
+              onClick={handleBuyNow}
+              disabled={isBuying}
+              className="flex-1 bg-[#D4A017] text-black font-bold py-4 rounded-xl font-body text-sm active:scale-[0.98] transition-transform disabled:opacity-60"
             >
-              Buy Now
+              {isBuying ? 'Processing...' : 'Buy Now'}
             </button>
           </div>
         </div>
