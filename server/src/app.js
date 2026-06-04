@@ -126,6 +126,8 @@ app.use('/api/feed', require('./routes/feed'));
 app.use('/api/user', require('./routes/user'));
 app.use('/api/subscribe', require('./routes/subscribe'));
 app.use('/api/prices', require('./routes/prices'));
+app.use('/api/messages', require('./routes/messages'));
+app.use('/api/crh', require('./routes/crh'));
 
 // Leaderboard shortcut (served by user router)
 app.get('/api/leaderboard', (req, res, next) => {

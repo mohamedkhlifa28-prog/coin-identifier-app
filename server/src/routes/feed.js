@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { authMiddleware, optionalAuth } = require('../middleware/auth');
 const db = require('../db/database');
 const { awardXP } = require('../utils/xp');
+const { awardBadge } = require('../utils/badges');
 
 const router = express.Router();
 
@@ -120,6 +121,10 @@ router.post('/', authMiddleware, (req, res) => {
   );
 
   const xpResult = awardXP(db, userId, 15, 'create_post');
+
+  // Badge: first post
+  const io = req.app.get('io');
+  awardBadge(db, userId, 'post_1', io);
 
   const post = db.prepare(`
     SELECT p.*, u.name as author_name, u.avatar as author_avatar, u.level as author_level

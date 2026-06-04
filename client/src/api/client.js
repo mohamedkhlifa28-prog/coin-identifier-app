@@ -107,6 +107,23 @@ export const subscribeAPI = {
   cancel: () => apiClient.post('/subscribe/cancel'),
 }
 
+// Messages API
+export const messagesAPI = {
+  getConversations: () => apiClient.get('/messages/conversations'),
+  getMessages: (userId) => apiClient.get(`/messages/${userId}`),
+  sendMessage: (userId, content, listingId) => apiClient.post(`/messages/${userId}`, { content, listingId }),
+  markRead: (userId) => apiClient.put(`/messages/${userId}/read`),
+}
+
+// CRH API
+export const crhAPI = {
+  getSessions: () => apiClient.get('/crh'),
+  getStats: () => apiClient.get('/crh/stats'),
+  createSession: (data) => apiClient.post('/crh', data),
+  updateSession: (id, data) => apiClient.put(`/crh/${id}`, data),
+  deleteSession: (id) => apiClient.delete(`/crh/${id}`),
+}
+
 // Prices API
 export const pricesAPI = {
   getPrice: (coinId) => apiClient.get(`/prices/${coinId}`),
