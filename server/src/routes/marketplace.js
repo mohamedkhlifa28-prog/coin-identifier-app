@@ -4,6 +4,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const { authMiddleware, optionalAuth } = require('../middleware/auth');
 const db = require('../db/database');
+const { awardBadge } = require('../utils/badges');
 
 const router = express.Router();
 
@@ -155,6 +156,10 @@ router.post('/', authMiddleware, (req, res) => {
     SELECT l.*, u.name as seller_name FROM listings l
     JOIN users u ON l.seller_id = u.id WHERE l.id = ?
   `).get(id);
+
+  // Badge: first listing
+  const io = req.app.get('io');
+  awardBadge(db, userId, 'list_1', io);
 
   return res.status(201).json({
     ...listing,

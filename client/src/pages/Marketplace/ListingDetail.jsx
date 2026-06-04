@@ -5,7 +5,6 @@ import { marketplaceAPI } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import { formatCurrency, getInitials, timeAgo } from '../../utils/helpers'
 import RarityBadge from '../../components/UI/RarityBadge'
-
 export default function ListingDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
@@ -229,10 +228,15 @@ export default function ListingDetail() {
               <p className="text-gray-600 text-xs font-body">Listed {timeAgo(listing.createdAt)}</p>
             )}
           </div>
-          <button className="flex items-center gap-1.5 bg-[#2A2A2A] rounded-xl px-3 py-2">
-            <MessageCircle size={14} className="text-gray-400" />
-            <span className="text-gray-400 text-xs font-body">Message</span>
-          </button>
+          {!isOwner && (
+            <button
+              onClick={() => navigate(`/messages/${listing.seller_id}?name=${encodeURIComponent(seller.name || 'Seller')}&listingId=${id}`)}
+              className="flex items-center gap-1.5 bg-[#2A2A2A] rounded-xl px-3 py-2"
+            >
+              <MessageCircle size={14} className="text-gray-400" />
+              <span className="text-gray-400 text-xs font-body">Message</span>
+            </button>
+          )}
         </div>
 
         {/* Coin details */}
