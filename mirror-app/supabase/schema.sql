@@ -17,7 +17,7 @@ CREATE TABLE users (
 -- Voice profiles (the AI personality model for each user)
 CREATE TABLE voice_profiles (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  user_id UUID UNIQUE REFERENCES users(id) ON DELETE CASCADE,
   profile_json JSONB NOT NULL DEFAULT '{}',
   accuracy_score INT DEFAULT 40,
   version INT DEFAULT 1,
