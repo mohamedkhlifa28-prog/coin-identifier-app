@@ -47,7 +47,7 @@ router.get('/stats', authMiddleware, (req, res) => {
 // GET /api/collection
 router.get('/', authMiddleware, (req, res) => {
   const userId = req.user.id;
-  const { country, yearMin, yearMax, rarity, denomination, series, sortBy } = req.query;
+  const { country, yearMin, yearMax, rarity, rarities, denomination, series, sortBy } = req.query;
 
   let query = 'SELECT * FROM user_coins WHERE user_id = ?';
   const params = [userId];
@@ -64,7 +64,16 @@ router.get('/', authMiddleware, (req, res) => {
     query += ' AND year <= ?';
     params.push(parseInt(yearMax, 10));
   }
-  if (rarity) {
+  if (rarities) {
+    const list = rarities.split(',').map(r => r.trim()).filter(Boolean);
+    if (list.length === 1) {
+      query += ' AND rarity_tier = ?';
+      params.push(list[0]);
+    } else if (list.length > 1) {
+      query += ` AND rarity_tier IN (${list.map(() => '?').join(',')})`;
+      params.push(...list);
+    }
+  } else if (rarity) {
     query += ' AND rarity_tier = ?';
     params.push(rarity);
   }
@@ -75,21 +84,25 @@ router.get('/', authMiddleware, (req, res) => {
 
   // Sort
   switch (sortBy) {
+    case 'value_desc':
     case 'value':
-      query += ' ORDER BY estimated_value DESC';
-      break;
+      query += ' ORDER BY estimated_value DESC'; break;
+    case 'value_asc':
+      query += ' ORDER BY estimated_value ASC'; break;
+    case 'year_asc':
     case 'year':
-      query += ' ORDER BY year ASC';
-      break;
+      query += ' ORDER BY year ASC'; break;
+    case 'year_desc':
+      query += ' ORDER BY year DESC'; break;
     case 'rarity': {
       const rarityOrder = "CASE rarity_tier WHEN 'Ultra Rare' THEN 1 WHEN 'Very Rare' THEN 2 WHEN 'Rare' THEN 3 WHEN 'Uncommon' THEN 4 ELSE 5 END";
-      query += ` ORDER BY ${rarityOrder}`;
-      break;
+      query += ` ORDER BY ${rarityOrder}`; break;
     }
-    case 'dateAdded':
+    case 'date_asc':
+      query += ' ORDER BY created_at ASC'; break;
+    case 'date_desc':
     default:
-      query += ' ORDER BY created_at DESC';
-      break;
+      query += ' ORDER BY created_at DESC'; break;
   }
 
   const coins = db.prepare(query).all(...params);

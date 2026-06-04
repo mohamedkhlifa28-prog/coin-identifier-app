@@ -12,7 +12,8 @@ export function useSocket() {
 
     const userId = user._id || user.id
 
-    const socket = io('http://localhost:3001', {
+    const socketUrl = import.meta.env.PROD ? window.location.origin : 'http://localhost:3001'
+    const socket = io(socketUrl, {
       auth: { userId },
       transports: ['websocket', 'polling'],
       reconnectionAttempts: 5,

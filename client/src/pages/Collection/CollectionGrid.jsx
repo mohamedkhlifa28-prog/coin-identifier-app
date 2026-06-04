@@ -21,15 +21,6 @@ const SORT_OPTIONS = [
   { value: 'rarity', label: 'Rarity' },
 ]
 
-// Mock portfolio trend data
-const MOCK_TREND = [
-  { month: 'Jan', value: 120 },
-  { month: 'Feb', value: 185 },
-  { month: 'Mar', value: 160 },
-  { month: 'Apr', value: 240 },
-  { month: 'May', value: 310 },
-  { month: 'Jun', value: 290 },
-]
 
 export default function CollectionGrid() {
   const navigate = useNavigate()
@@ -60,7 +51,7 @@ export default function CollectionGrid() {
       if (filters.yearMax) params.yearMax = filters.yearMax
       if (filters.rarities.length) params.rarities = filters.rarities.join(',')
       if (filters.denomination) params.denomination = filters.denomination
-      if (filters.sortBy) params.sort = filters.sortBy
+      if (filters.sortBy) params.sortBy = filters.sortBy
 
       const [coinsRes, statsRes] = await Promise.all([
         collectionAPI.getCollection(params),
@@ -87,6 +78,22 @@ export default function CollectionGrid() {
   const costBasis = stats?.costBasis || 0
   const gainLoss = totalValue - costBasis
   const gainLossPercent = costBasis > 0 ? ((gainLoss / costBasis) * 100).toFixed(1) : null
+
+  const trendData = useMemo(() => {
+    if (!coins.length) return []
+    const byMonth = {}
+    const sorted = [...coins].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    sorted.forEach((c) => {
+      const d = new Date(c.created_at)
+      const key = d.toLocaleDateString('en', { month: 'short', year: '2-digit' })
+      byMonth[key] = (byMonth[key] || 0) + (c.estimated_value || 0)
+    })
+    let cumulative = 0
+    return Object.entries(byMonth).map(([month, v]) => {
+      cumulative += v
+      return { month, value: Math.round(cumulative) }
+    })
+  }, [coins])
 
   const topCoins = useMemo(
     () => [...coins]
@@ -176,7 +183,7 @@ export default function CollectionGrid() {
               <div>
                 <p className="text-gray-500 text-xs font-body mb-2">Value Trend (6 months)</p>
                 <ResponsiveContainer width="100%" height={80}>
-                  <LineChart data={MOCK_TREND}>
+                  <LineChart data={trendData}>
                     <Line
                       type="monotone"
                       dataKey="value"

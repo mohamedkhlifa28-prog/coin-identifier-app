@@ -177,11 +177,22 @@ router.get('/:id', optionalAuth, (req, res) => {
   const offerCount = db.prepare('SELECT COUNT(*) as count FROM offers WHERE listing_id = ? AND status = ?')
     .get(req.params.id, 'pending');
 
+  // Include full offers when requester is the seller
+  let offers = [];
+  if (req.user && req.user.id === listing.seller_id) {
+    offers = db.prepare(`
+      SELECT o.*, u.name as buyer_name
+      FROM offers o JOIN users u ON o.buyer_id = u.id
+      WHERE o.listing_id = ? ORDER BY o.created_at DESC
+    `).all(req.params.id);
+  }
+
   return res.json({
     ...listing,
     images: JSON.parse(listing.images || '[]'),
     coin_data: JSON.parse(listing.coin_data || '{}'),
     offerCount: offerCount.count,
+    offers,
   });
 });
 

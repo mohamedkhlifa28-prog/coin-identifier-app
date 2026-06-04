@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Heart, MessageCircle, Check, X } from 'lucide-react'
+import { ArrowLeft, Heart, MessageCircle, Check, X, Loader } from 'lucide-react'
 import { marketplaceAPI } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import { formatCurrency, getInitials, timeAgo } from '../../utils/helpers'
@@ -21,6 +21,8 @@ export default function ListingDetail() {
   const [isMakingOffer, setIsMakingOffer] = useState(false)
   const [offerSuccess, setOfferSuccess] = useState(false)
   const [showOfferForm, setShowOfferForm] = useState(false)
+  const [offers, setOffers] = useState([])
+  const [respondingTo, setRespondingTo] = useState(null)
 
   useEffect(() => {
     const fetchListing = async () => {
@@ -29,6 +31,7 @@ export default function ListingDetail() {
         const data = res.data.listing || res.data
         setListing(data)
         setIsWatchlisted(data.isWatchlisted || false)
+        setOffers(data.offers || [])
       } catch (err) {
         setError('Failed to load listing.')
       } finally {
@@ -50,6 +53,18 @@ export default function ListingDetail() {
       console.error('Watchlist error:', err)
     }
   }, [id, isAuthenticated, navigate])
+
+  const handleOfferAction = useCallback(async (offer, status) => {
+    setRespondingTo(offer.id)
+    try {
+      await marketplaceAPI.updateOffer(id, offer.id, status)
+      setOffers((prev) => prev.map((o) => o.id === offer.id ? { ...o, status } : o))
+    } catch (err) {
+      alert(err?.response?.data?.error || 'Failed to update offer.')
+    } finally {
+      setRespondingTo(null)
+    }
+  }, [id])
 
   const handleMakeOffer = useCallback(async () => {
     if (!isAuthenticated) {
@@ -92,10 +107,9 @@ export default function ListingDetail() {
     )
   }
 
-  const seller = listing.seller || {}
-  const photos = listing.photos || (listing.imageUrl ? [listing.imageUrl] : [])
-  const isOwner = user && (user._id === seller._id || user.id === seller.id)
-  const offers = listing.offers || []
+  const seller = listing.seller || { name: listing.seller_name, level: listing.seller_level }
+  const photos = listing.photos || (listing.images?.length ? listing.images : listing.image_url ? [listing.image_url] : [])
+  const isOwner = user && (user.id === listing.seller_id)
 
   return (
     <div className="min-h-screen bg-[#0F0F0F] pb-32">
@@ -304,10 +318,18 @@ export default function ListingDetail() {
                   </div>
                   {offer.status === 'pending' && (
                     <div className="flex gap-2">
-                      <button className="w-8 h-8 bg-green-800/50 border border-green-700/50 rounded-lg flex items-center justify-center">
-                        <Check size={14} className="text-green-400" />
+                      <button
+                        onClick={() => handleOfferAction(offer, 'accepted')}
+                        disabled={respondingTo === offer.id}
+                        className="w-8 h-8 bg-green-800/50 border border-green-700/50 rounded-lg flex items-center justify-center disabled:opacity-50"
+                      >
+                        {respondingTo === offer.id ? <Loader size={12} className="text-green-400 animate-spin" /> : <Check size={14} className="text-green-400" />}
                       </button>
-                      <button className="w-8 h-8 bg-red-900/30 border border-red-700/50 rounded-lg flex items-center justify-center">
+                      <button
+                        onClick={() => handleOfferAction(offer, 'declined')}
+                        disabled={respondingTo === offer.id}
+                        className="w-8 h-8 bg-red-900/30 border border-red-700/50 rounded-lg flex items-center justify-center disabled:opacity-50"
+                      >
                         <X size={14} className="text-red-400" />
                       </button>
                     </div>

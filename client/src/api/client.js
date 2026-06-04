@@ -75,6 +75,8 @@ export const marketplaceAPI = {
   getListing: (id) => apiClient.get(`/marketplace/${id}`),
   makeOffer: (id, offerData) =>
     apiClient.post(`/marketplace/${id}/offer`, offerData),
+  updateOffer: (id, offerId, status) =>
+    apiClient.put(`/marketplace/${id}/offer/${offerId}`, { status }),
   toggleWatchlist: (id) =>
     apiClient.post(`/marketplace/${id}/watch`),
   getWatchlist: () => apiClient.get('/marketplace/watchlist'),
@@ -86,8 +88,8 @@ export const feedAPI = {
   createPost: (data) => apiClient.post('/feed', data),
   likePost: (id) => apiClient.post(`/feed/${id}/like`),
   getPost: (id) => apiClient.get(`/feed/${id}`),
-  addComment: (id, comment) =>
-    apiClient.post(`/feed/${id}/comment`, { comment }),
+  addComment: (id, content) =>
+    apiClient.post(`/feed/${id}/comment`, { content }),
   getTrending: () => apiClient.get('/feed/trending'),
 }
 
