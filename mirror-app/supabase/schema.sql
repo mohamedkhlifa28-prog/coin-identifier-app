@@ -1,0 +1,119 @@
+-- Enable pgvector for memory embeddings
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- Users table (mirrors Supabase auth.users)
+CREATE TABLE users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  stripe_customer_id TEXT,
+  plan TEXT DEFAULT 'free',  -- 'free' | 'pro' | 'platinum'
+  mirror_age_days INT DEFAULT 0,
+  streak_days INT DEFAULT 0,
+  last_active TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Voice profiles (the AI personality model for each user)
+CREATE TABLE voice_profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  profile_json JSONB NOT NULL DEFAULT '{}',
+  accuracy_score INT DEFAULT 40,
+  version INT DEFAULT 1,
+  total_sessions INT DEFAULT 0,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Conversations
+CREATE TABLE conversations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  messages_json JSONB NOT NULL DEFAULT '[]',
+  traits_extracted JSONB DEFAULT '[]',
+  session_date TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Memory bank — every notable quote or moment the user has said
+CREATE TABLE memories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  quote TEXT NOT NULL,
+  context TEXT,
+  tags TEXT[],
+  weight INT DEFAULT 5,  -- emotional importance 1-10
+  session_id UUID REFERENCES conversations(id),
+  pinned BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  embedding VECTOR(1536)  -- pgvector embedding
+);
+CREATE INDEX ON memories USING ivfflat (embedding vector_cosine_ops);
+
+-- Contradiction pairs detected between memories
+CREATE TABLE contradictions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  memory_id_1 UUID REFERENCES memories(id),
+  memory_id_2 UUID REFERENCES memories(id),
+  explanation TEXT,
+  detected_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Shared mirrors for the viral loop feature
+CREATE TABLE shared_mirrors (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  slug TEXT UNIQUE NOT NULL,
+  is_active BOOLEAN DEFAULT true,
+  views INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Voice clones (ElevenLabs)
+CREATE TABLE voice_clones (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  elevenlabs_voice_id TEXT NOT NULL,
+  sample_url TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Enable Row Level Security on all tables
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voice_profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE memories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contradictions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE shared_mirrors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE voice_clones ENABLE ROW LEVEL SECURITY;
+
+-- RLS policies (users can only read/write their own data)
+CREATE POLICY "Users own data" ON users FOR ALL USING (auth.uid() = id);
+CREATE POLICY "Users own profiles" ON voice_profiles FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users own conversations" ON conversations FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users own memories" ON memories FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users own contradictions" ON contradictions FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users own shared mirrors" ON shared_mirrors FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "Users own voice clones" ON voice_clones FOR ALL USING (auth.uid() = user_id);
+
+-- Allow public read of shared mirrors (for /mirror/[slug] page — no login required)
+CREATE POLICY "Public can read active shared mirrors" ON shared_mirrors
+  FOR SELECT USING (is_active = true);
+
+-- Trigger: auto-create a users row after Supabase auth signup
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (id, email, name)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    NEW.raw_user_meta_data->>'name'
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
