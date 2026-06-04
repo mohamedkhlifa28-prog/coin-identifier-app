@@ -19,8 +19,6 @@ interface SettingsClientProps {
   plan: Plan
 }
 
-const SECTION_IDS = ['profile', 'mirror', 'voice', 'sharing', 'subscription', 'notifications', 'danger']
-
 export function SettingsClient({ user, voiceProfile, shares: initialShares, hasVoiceClone, plan: initialPlan }: SettingsClientProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
