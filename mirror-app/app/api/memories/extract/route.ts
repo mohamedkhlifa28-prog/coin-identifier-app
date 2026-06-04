@@ -99,6 +99,14 @@ export async function POST(request: NextRequest) {
       { role: 'assistant', content: assistantMessage, timestamp: new Date().toISOString() },
     ]
 
+    // Check if this session already exists before upserting — used to avoid
+    // double-counting sessions when the same session sends multiple messages
+    const { data: existingConvo } = await supabase
+      .from('conversations')
+      .select('id')
+      .eq('id', sessionId)
+      .maybeSingle()
+
     await supabase
       .from('conversations')
       .upsert(
@@ -111,8 +119,10 @@ export async function POST(request: NextRequest) {
         { onConflict: 'id' }
       )
 
-    // Increment total_sessions on voice profile
-    await supabase.rpc('increment_voice_profile_sessions', { uid: userId })
+    // Increment total_sessions only on the first message of a new session
+    if (!existingConvo) {
+      await supabase.rpc('increment_voice_profile_sessions', { uid: userId })
+    }
 
     return NextResponse.json({ success: true })
   } catch (err) {
@@ -194,7 +204,20 @@ User message: "${userMessage}"`
     traits.new_traits.length > 0 ||
     Object.keys(traits.updated_fields).length > 0
 
-  if (!hasUpdates) return
+  // Always nudge accuracy up for the act of conversing (+0.2 baseline).
+  // Bonus +0.3 on top when new traits are actually learned. Cap at 98.
+  const baseAccuracy = profileRow.accuracy_score ?? 40
+  const accuracyDelta = hasUpdates ? 0.5 : 0.2
+  const newAccuracy = Math.min(98, baseAccuracy + accuracyDelta)
+
+  if (!hasUpdates) {
+    // No new traits — just persist the accuracy nudge
+    await supabase
+      .from('voice_profiles')
+      .update({ accuracy_score: Math.round(newAccuracy), updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+    return
+  }
 
   // Merge updated fields into current profile
   const updatedProfile: VoiceProfileData = { ...currentProfile }
@@ -211,8 +234,6 @@ User message: "${userMessage}"`
     }
   }
 
-  // Increment accuracy score by 0.5, capped at 98
-  const newAccuracy = Math.min(98, (profileRow.accuracy_score ?? 40) + 0.5)
   updatedProfile.accuracy_score = newAccuracy
 
   await supabase

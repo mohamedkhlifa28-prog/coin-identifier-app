@@ -46,22 +46,29 @@ function buildSystemPrompt(
 ): string {
   const profileStr = JSON.stringify(profile, null, 2)
 
+  // Sort by emotional weight descending so high-importance memories appear first
+  const ranked = [...memories].sort((a, b) => (b.weight ?? 5) - (a.weight ?? 5))
+
   const memorySection =
-    memories.length > 0
+    ranked.length > 0
       ? `
 You also have access to things ${userName} has actually said in past conversations.
 Use these naturally when relevant — quote them back, use them to make a point,
 or call out a contradiction like a close friend would.
 
-RELEVANT MEMORIES FROM THE PAST:
-${memories
-  .map((m) => `${formatDate(m.created_at)}: "${m.quote}"${m.context ? ` (context: ${m.context})` : ''}`)
+RELEVANT MEMORIES FROM THE PAST (sorted by emotional importance):
+${ranked
+  .map((m) => {
+    const importance = (m.weight ?? 5) >= 8 ? ' [HIGH IMPORTANCE]' : ''
+    return `${formatDate(m.created_at)}${importance}: "${m.quote}"${m.context ? ` (context: ${m.context})` : ''}`
+  })
   .join('\n')}
 
 When referencing a memory, say things like:
 "You literally told me on [date]: [quote]"
 "Remember when you said [quote]? You were talking about [context]."
-Make it feel natural — like someone who was there and remembers.`
+Make it feel natural — like someone who was there and remembers.
+HIGH IMPORTANCE memories are emotionally significant — reference them more readily.`
       : ''
 
   return `You are Mirror — an AI trained to think, speak, and respond exactly like ${userName}.

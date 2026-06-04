@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-const PROTECTED = ['/chat', '/vault', '/settings', '/generate']
+const PROTECTED = ['/chat', '/vault', '/settings', '/generate', '/onboard']
 const AUTH_PAGES = ['/login', '/signup']
 // Stripe webhook and public mirror pages must be reachable without auth
 const PUBLIC_PREFIXES = ['/api/webhooks', '/mirror', '/pricing']
