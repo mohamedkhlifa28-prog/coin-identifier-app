@@ -11,6 +11,7 @@ import { createServiceClient } from '@/lib/supabase'
 import { anthropic, CLAUDE_MODEL } from '@/lib/anthropic'
 import { generateEmbedding } from '@/lib/openai'
 import { parseClaudeJSON } from '@/lib/utils'
+import { sendPushNotification } from '@/lib/webpush'
 import type { VoiceProfileData } from '@/types'
 
 interface ExtractedMemory {
@@ -80,8 +81,15 @@ export async function POST(request: NextRequest) {
 
     const MILESTONES = [100, 500, 1000]
     if (memoryCount && MILESTONES.includes(memoryCount)) {
-      console.log(`[Milestone] User ${userId} hit ${memoryCount} memories`)
-      // Push notification would go here — see lib/webpush.ts
+      const { data: { user: authUser } } = await supabase.auth.admin.getUserById(userId)
+      const pushSub = authUser?.user_metadata?.push_subscription as string | undefined
+      if (pushSub) {
+        await sendPushNotification(pushSub, {
+          title: `${memoryCount} memories`,
+          body: `Your Mirror has captured ${memoryCount} moments from you.`,
+          url: '/vault',
+        })
+      }
     }
 
     // Save conversation to DB (upsert by session_id stored as the conversation id)

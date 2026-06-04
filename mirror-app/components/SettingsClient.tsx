@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, FormEvent } from 'react'
+import { useState, useRef, useEffect, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
@@ -30,9 +30,62 @@ export function SettingsClient({ user, voiceProfile, shares: initialShares, hasV
   const [voiceCloned, setVoiceCloned] = useState(hasVoiceClone)
   const [portalLoading, setPortalLoading] = useState(false)
   const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null)
+  const [pushSupported, setPushSupported] = useState(false)
+  const [pushEnabled, setPushEnabled] = useState(false)
+  const [pushLoading, setPushLoading] = useState(false)
   const audioInputRef = useRef<HTMLInputElement>(null)
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) return
+    setPushSupported(true)
+    navigator.serviceWorker.ready.then((reg) =>
+      reg.pushManager.getSubscription().then((sub) => setPushEnabled(!!sub))
+    )
+  }, [])
+
+  async function subscribePush() {
+    if (!('serviceWorker' in navigator)) return
+    setPushLoading(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+      if (!vapidKey) { showMsg('Push not configured (no VAPID key).', 'error'); return }
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: vapidKey,
+      })
+      const res = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(sub),
+      })
+      if (res.ok) { setPushEnabled(true); showMsg('Push notifications enabled.') }
+      else showMsg('Failed to enable notifications.', 'error')
+    } catch (err) {
+      showMsg(err instanceof Error ? err.message : 'Failed to subscribe.', 'error')
+    } finally {
+      setPushLoading(false)
+    }
+  }
+
+  async function unsubscribePush() {
+    if (!('serviceWorker' in navigator)) return
+    setPushLoading(true)
+    try {
+      const reg = await navigator.serviceWorker.ready
+      const sub = await reg.pushManager.getSubscription()
+      if (sub) await sub.unsubscribe()
+      await fetch('/api/push/subscribe', { method: 'DELETE' })
+      setPushEnabled(false)
+      showMsg('Push notifications disabled.')
+    } catch {
+      showMsg('Failed to disable notifications.', 'error')
+    } finally {
+      setPushLoading(false)
+    }
+  }
 
   function showMsg(text: string, type: 'success' | 'error' = 'success') {
     setMessage({ text, type })
@@ -307,6 +360,44 @@ export function SettingsClient({ user, voiceProfile, shares: initialShares, hasV
             <button onClick={openPortal} disabled={portalLoading} className="btn-secondary text-sm px-5 py-2">
               {portalLoading ? 'Opening…' : 'Manage billing →'}
             </button>
+          )}
+        </Section>
+
+        {/* Notifications */}
+        <Section id="notifications" title="Notifications">
+          {!pushSupported ? (
+            <p className="text-sm text-[#888888]">
+              Push notifications are not supported in this browser.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-[#888888]">
+                Get notified when you hit memory milestones (100, 500, 1000 memories).
+              </p>
+              <div className="flex items-center gap-3">
+                <div className={`w-2 h-2 rounded-full ${pushEnabled ? 'bg-[#34d399]' : 'bg-[#555]'}`} />
+                <span className="text-sm text-[#f0f0f0]">
+                  {pushEnabled ? 'Notifications on' : 'Notifications off'}
+                </span>
+              </div>
+              {pushEnabled ? (
+                <button
+                  onClick={unsubscribePush}
+                  disabled={pushLoading}
+                  className="btn-secondary text-sm px-5 py-2"
+                >
+                  {pushLoading ? 'Updating…' : 'Turn off'}
+                </button>
+              ) : (
+                <button
+                  onClick={subscribePush}
+                  disabled={pushLoading}
+                  className="btn-primary text-sm px-5 py-2"
+                >
+                  {pushLoading ? 'Enabling…' : 'Enable notifications'}
+                </button>
+              )}
+            </div>
           )}
         </Section>
 
