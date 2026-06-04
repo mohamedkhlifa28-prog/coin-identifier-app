@@ -133,12 +133,27 @@ export async function POST(request: NextRequest) {
 }
 
 async function extractMemories(userMessage: string): Promise<ExtractedMemory[]> {
-  const prompt = `From this user message, extract any notable quotes, strong opinions, personal stories,
-emotional statements, life decisions, or memorable moments.
+  const prompt = `From this user message, extract quotes worth remembering months from now — things that reveal who this person really is.
+
+EXTRACT:
+- Strong, specific opinions ("I hate when people...")
+- Personal stories with emotional weight
+- Life decisions, turning points, regrets
+- Beliefs they hold firmly
+- Memorable, characteristic phrases that only they would say
+- Anything that would help an AI sound exactly like them
+
+DO NOT EXTRACT:
+- Casual filler ("yeah," "ok," "what's up")
+- Generic statements anyone might say
+- Questions they asked
+- Anything vague or forgettable
+
 Return JSON array ONLY, no preamble, no backticks, no markdown:
 [{ "quote": string, "context": string, "tags": string[], "weight": 1-10 }]
-Weight 1-10 reflects emotional importance (10 = life-defining, 1 = trivial).
-Return empty array [] if nothing notable.
+
+weight scale: 10 = life-defining / core identity, 7-9 = strong opinion or significant story, 4-6 = useful trait or preference, 1-3 = minor but worth noting
+Return [] if nothing is genuinely worth extracting.
 
 Message: "${userMessage}"`
 
@@ -171,23 +186,36 @@ async function extractTraits(
 
   const currentProfile = profileRow.profile_json as VoiceProfileData
 
-  const prompt = `From this conversation exchange, identify any NEW personality traits, opinions, writing quirks,
-or preferences you learned about this person that are NOT already captured.
+  const prompt = `From this conversation, extract NEW things you learned about this person's personality that are NOT already in their profile.
+
+Focus on specifics — vague observations like "seems friendly" are useless. Look for:
+- Exact phrases or expressions they use (→ common_phrases or vocabulary_samples)
+- Specific opinions on topics (→ opinions: { topic, stance })
+- Strong dislikes or irritants (→ pet_peeves)
+- Things they're passionate about (→ topics_they_love)
+- Things they avoid or won't engage with (→ topics_they_avoid)
+- How they write: abbreviations, punctuation habits, capitalisation, emoji use (→ writing_quirks)
+- Deep values or principles they live by (→ core_values)
+
 Return JSON ONLY, no preamble, no backticks:
 { "new_traits": string[], "updated_fields": {} }
 
-updated_fields should only include fields from this schema that should be updated:
-{ common_phrases, pet_peeves, core_values, vocabulary_samples, opinions, topics_they_love, topics_they_avoid, writing_quirks }
+updated_fields must only use these keys: common_phrases, pet_peeves, core_values, vocabulary_samples, opinions, topics_they_love, topics_they_avoid, writing_quirks
+For opinions, use array of { "topic": string, "stance": string }
 
-Only return things genuinely NEW. Return empty arrays/objects if nothing new.
+Only return genuinely NEW information. If nothing is new, return { "new_traits": [], "updated_fields": {} }.
 
-Current profile summary:
+Current profile:
 - humor_style: ${currentProfile.humor_style}
 - communication_style: ${currentProfile.communication_style}
-- common_phrases: ${JSON.stringify(currentProfile.common_phrases?.slice(0, 5))}
-- pet_peeves count: ${currentProfile.pet_peeves?.length}
+- emotional_register: ${currentProfile.emotional_register}
+- common_phrases already known: ${JSON.stringify(currentProfile.common_phrases?.slice(0, 5))}
+- pet_peeves already known: ${JSON.stringify(currentProfile.pet_peeves?.slice(0, 3))}
+- topics_they_love already known: ${JSON.stringify(currentProfile.topics_they_love?.slice(0, 3))}
+- opinions already known: ${currentProfile.opinions?.length ?? 0} opinions captured
 
-User message: "${userMessage}"`
+User message: "${userMessage}"
+Assistant response: "${assistantMessage}"`
 
   const response = await anthropic.messages.create({
     model: CLAUDE_MODEL,
