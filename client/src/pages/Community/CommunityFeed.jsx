@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Heart, MessageCircle, Bookmark, Plus, Trophy, Flame, X } from 'lucide-react'
+import { Heart, MessageCircle, Plus, Trophy, Flame, X, Send } from 'lucide-react'
 import { feedAPI } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import SkeletonCard from '../../components/UI/SkeletonCard'
@@ -54,7 +54,7 @@ function WeeklyChallenge({ challenge }) {
   )
 }
 
-function PostCard({ post, onLike }) {
+function PostCard({ post, onLike, onComment }) {
   const [isLiked, setIsLiked] = useState(post.is_liked || false)
   const [likeCount, setLikeCount] = useState(post.likes || 0)
 
@@ -134,12 +134,12 @@ function PostCard({ post, onLike }) {
             <Heart size={18} fill={isLiked ? 'currentColor' : 'none'} />
             <span className="text-xs font-body">{likeCount}</span>
           </button>
-          <button className="flex items-center gap-1.5 text-gray-500">
+          <button
+            onClick={() => onComment && onComment(post)}
+            className="flex items-center gap-1.5 text-gray-500 active:text-[#D4A017] transition-colors"
+          >
             <MessageCircle size={18} />
             <span className="text-xs font-body">{post.comments_count || 0}</span>
-          </button>
-          <button className="ml-auto text-gray-500">
-            <Bookmark size={18} />
           </button>
         </div>
       </div>
@@ -158,6 +158,12 @@ export default function CommunityFeed() {
 
   const [newPost, setNewPost] = useState({ type: 'showcase', content: '', estimated_value: '' })
   const [isPosting, setIsPosting] = useState(false)
+
+  const [commentingPost, setCommentingPost] = useState(null)
+  const [comments, setComments] = useState([])
+  const [isLoadingComments, setIsLoadingComments] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false)
 
   const loadFeed = useCallback(async (pageNum = 1) => {
     if (pageNum === 1) setIsLoading(true)
@@ -188,6 +194,43 @@ export default function CommunityFeed() {
       .then((data) => setChallenge(data.challenge))
       .catch(() => {})
   }, [loadFeed])
+
+  const handleOpenComments = useCallback(async (post) => {
+    setCommentingPost(post)
+    setComments([])
+    setCommentText('')
+    setIsLoadingComments(true)
+    try {
+      const res = await feedAPI.getPost(post.id)
+      setComments(res.data.comments || [])
+    } catch {
+      setComments([])
+    } finally {
+      setIsLoadingComments(false)
+    }
+  }, [])
+
+  const handleSubmitComment = useCallback(async () => {
+    if (!commentText.trim() || !commentingPost) return
+    setIsSubmittingComment(true)
+    try {
+      const res = await feedAPI.addComment(commentingPost.id, commentText.trim())
+      const newComment = res.data.comment
+      if (newComment) {
+        setComments((prev) => [...prev, newComment])
+        setPosts((prev) => prev.map((p) =>
+          p.id === commentingPost.id
+            ? { ...p, comments_count: (p.comments_count || 0) + 1 }
+            : p
+        ))
+      }
+      setCommentText('')
+    } catch {
+      alert('Failed to post comment.')
+    } finally {
+      setIsSubmittingComment(false)
+    }
+  }, [commentText, commentingPost])
 
   const handleCreatePost = async () => {
     if (!newPost.content.trim()) return
@@ -248,7 +291,7 @@ export default function CommunityFeed() {
         ) : (
           <>
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
+              <PostCard key={post.id} post={post} onComment={handleOpenComments} />
             ))}
             {hasMore && (
               <button
@@ -312,6 +355,57 @@ export default function CommunityFeed() {
             >
               {isPosting ? 'Posting...' : 'Share Post'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Comments sheet */}
+      {commentingPost && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end">
+          <div className="bg-[#1A1A1A] border-t border-[#2A2A2A] rounded-t-2xl w-full max-w-[430px] mx-auto flex flex-col" style={{ maxHeight: '75vh' }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2A2A2A]">
+              <h3 className="text-white font-display font-bold text-base">Comments</h3>
+              <button onClick={() => setCommentingPost(null)} className="w-8 h-8 rounded-full bg-[#2A2A2A] flex items-center justify-center">
+                <X size={16} className="text-gray-400" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 scrollbar-none">
+              {isLoadingComments ? (
+                <div className="flex justify-center py-8">
+                  <div className="w-6 h-6 border-2 border-[#D4A017] border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : comments.length === 0 ? (
+                <p className="text-gray-500 text-sm font-body text-center py-8">No comments yet. Be the first!</p>
+              ) : (
+                comments.map((c, i) => (
+                  <div key={c.id || i} className="flex gap-3">
+                    <div className="w-8 h-8 rounded-full bg-[#D4A017]/20 flex items-center justify-center flex-shrink-0">
+                      <span className="text-[#D4A017] text-xs font-bold font-body">{(c.author_name || 'U').charAt(0).toUpperCase()}</span>
+                    </div>
+                    <div className="flex-1 bg-[#0F0F0F] rounded-xl px-3 py-2">
+                      <p className="text-[#D4A017] text-xs font-body font-semibold mb-0.5">{c.author_name || 'User'}</p>
+                      <p className="text-gray-300 text-sm font-body leading-snug">{c.content}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="px-4 py-3 border-t border-[#2A2A2A] flex gap-3 items-center">
+              <input
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSubmitComment()}
+                placeholder="Add a comment..."
+                className="flex-1 bg-[#0F0F0F] border border-[#2A2A2A] rounded-xl px-3 py-2.5 text-white text-sm font-body placeholder-gray-600 focus:outline-none focus:border-[#D4A017]"
+              />
+              <button
+                onClick={handleSubmitComment}
+                disabled={!commentText.trim() || isSubmittingComment}
+                className="w-10 h-10 bg-[#D4A017] rounded-xl flex items-center justify-center disabled:opacity-50 active:scale-95 transition-transform"
+              >
+                <Send size={16} className="text-black" />
+              </button>
+            </div>
           </div>
         </div>
       )}

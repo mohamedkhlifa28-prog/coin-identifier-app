@@ -32,7 +32,13 @@ router.get('/watchlist', authMiddleware, (req, res) => {
 
 // GET /api/marketplace
 router.get('/', optionalAuth, (req, res) => {
-  const { denomination, country, grade, minPrice, maxPrice, search, page = 1, limit = 20 } = req.query;
+  const {
+    denomination, country, grade, search,
+    minPrice, maxPrice, priceMin, priceMax,
+    page = 1, limit = 20,
+  } = req.query;
+  const effectiveMinPrice = priceMin || minPrice;
+  const effectiveMaxPrice = priceMax || maxPrice;
 
   let query = `
     SELECT l.*, u.name as seller_name, u.email as seller_email
@@ -46,17 +52,21 @@ router.get('/', optionalAuth, (req, res) => {
     query += ' AND l.coin_data LIKE ?';
     params.push(`%${denomination}%`);
   }
+  if (country) {
+    query += ' AND l.coin_data LIKE ?';
+    params.push(`%${country}%`);
+  }
   if (grade) {
-    query += ' AND l.grade = ?';
-    params.push(grade);
+    query += ' AND l.grade LIKE ?';
+    params.push(`%${grade}%`);
   }
-  if (minPrice) {
+  if (effectiveMinPrice) {
     query += ' AND l.price >= ?';
-    params.push(parseFloat(minPrice));
+    params.push(parseFloat(effectiveMinPrice));
   }
-  if (maxPrice) {
+  if (effectiveMaxPrice) {
     query += ' AND l.price <= ?';
-    params.push(parseFloat(maxPrice));
+    params.push(parseFloat(effectiveMaxPrice));
   }
   if (search) {
     query += ' AND (l.title LIKE ? OR l.description LIKE ?)';
@@ -177,11 +187,22 @@ router.get('/:id', optionalAuth, (req, res) => {
   const offerCount = db.prepare('SELECT COUNT(*) as count FROM offers WHERE listing_id = ? AND status = ?')
     .get(req.params.id, 'pending');
 
+  // Include full offers when requester is the seller
+  let offers = [];
+  if (req.user && req.user.id === listing.seller_id) {
+    offers = db.prepare(`
+      SELECT o.*, u.name as buyer_name
+      FROM offers o JOIN users u ON o.buyer_id = u.id
+      WHERE o.listing_id = ? ORDER BY o.created_at DESC
+    `).all(req.params.id);
+  }
+
   return res.json({
     ...listing,
     images: JSON.parse(listing.images || '[]'),
     coin_data: JSON.parse(listing.coin_data || '{}'),
     offerCount: offerCount.count,
+    offers,
   });
 });
 
@@ -338,6 +359,54 @@ router.put('/:id/offer/:offerId', authMiddleware, (req, res) => {
 
   const updated = db.prepare('SELECT * FROM offers WHERE id = ?').get(offer.id);
   return res.json({ offer: updated });
+});
+
+// POST /api/marketplace/:id/buy
+router.post('/:id/buy', authMiddleware, async (req, res) => {
+  const listing = db.prepare('SELECT * FROM listings WHERE id = ? AND status = ?')
+    .get(req.params.id, 'active');
+
+  if (!listing) {
+    return res.status(404).json({ error: 'Listing not found or not active' });
+  }
+
+  if (listing.seller_id === req.user.id) {
+    return res.status(400).json({ error: 'Cannot buy your own listing' });
+  }
+
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return res.status(503).json({ error: 'Payment service not configured. Please contact the seller directly.' });
+  }
+
+  try {
+    const Stripe = require('stripe');
+    const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+    const buyer = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    const { successUrl, cancelUrl } = req.body;
+
+    const lineImages = listing.image_url ? [listing.image_url] : [];
+    const session = await stripe.checkout.sessions.create({
+      customer_email: buyer.email,
+      payment_method_types: ['card'],
+      line_items: [{
+        price_data: {
+          currency: 'usd',
+          product_data: { name: listing.title, images: lineImages },
+          unit_amount: Math.round(parseFloat(listing.price) * 100),
+        },
+        quantity: 1,
+      }],
+      mode: 'payment',
+      success_url: successUrl || `${process.env.CLIENT_URL || 'http://localhost:5173'}/marketplace/${listing.id}?purchased=true`,
+      cancel_url: cancelUrl || `${process.env.CLIENT_URL || 'http://localhost:5173'}/marketplace/${listing.id}`,
+      metadata: { listingId: listing.id, buyerId: req.user.id, sellerId: listing.seller_id },
+    });
+
+    return res.json({ url: session.url, sessionId: session.id });
+  } catch (err) {
+    console.error('Stripe buy error:', err.message);
+    return res.status(500).json({ error: 'Failed to create checkout session', details: err.message });
+  }
 });
 
 // POST /api/marketplace/:id/watch

@@ -167,11 +167,26 @@ router.post('/webhook', express.raw({ type: 'application/json' }), async (req, r
   switch (event.type) {
     case 'checkout.session.completed': {
       const session = event.data.object;
-      const userId = session.metadata && session.metadata.userId;
-      const tier = session.metadata && session.metadata.tier;
+      const { userId, tier, listingId, buyerId, sellerId } = session.metadata || {};
+
+      // Subscription upgrade
       if (userId && tier) {
         db.prepare('UPDATE users SET subscription_tier = ? WHERE id = ?').run(tier, userId);
         console.log(`User ${userId} upgraded to ${tier}`);
+      }
+
+      // Listing purchase
+      if (listingId && buyerId) {
+        db.prepare("UPDATE listings SET status = 'sold' WHERE id = ?").run(listingId);
+        const { v4: uuidv4 } = require('uuid');
+        const listing = db.prepare('SELECT title FROM listings WHERE id = ?').get(listingId);
+        if (listing) {
+          db.prepare(`INSERT INTO notifications (id, user_id, type, title, message, data) VALUES (?, ?, 'sale', ?, ?, ?)`)
+            .run(uuidv4(), sellerId, 'Listing Sold!', `Your listing "${listing.title}" was purchased.`, JSON.stringify({ listingId, buyerId }));
+          db.prepare(`INSERT INTO notifications (id, user_id, type, title, message, data) VALUES (?, ?, 'purchase', ?, ?, ?)`)
+            .run(uuidv4(), buyerId, 'Purchase Confirmed', `You successfully purchased "${listing.title}".`, JSON.stringify({ listingId }));
+        }
+        console.log(`Listing ${listingId} sold to buyer ${buyerId}`);
       }
       break;
     }

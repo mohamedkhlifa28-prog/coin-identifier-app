@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Upload, DollarSign, X, Plus } from 'lucide-react'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { ArrowLeft, DollarSign, X, Plus } from 'lucide-react'
 import { collectionAPI, marketplaceAPI } from '../../api/client'
 
 const GRADES = ['Poor', 'Good', 'Very Good', 'Fine', 'Very Fine', 'Extremely Fine', 'About Uncirculated', 'MS-60', 'MS-63', 'MS-65']
 
 export default function CreateListing() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const preselectedCoinId = location.state?.coinId
 
   const [myCoins, setMyCoins] = useState([])
   const [selectedCoin, setSelectedCoin] = useState(null)
@@ -22,9 +24,17 @@ export default function CreateListing() {
 
   useEffect(() => {
     collectionAPI.getCollection()
-      .then((res) => setMyCoins(res.data.coins || []))
+      .then((res) => {
+        const coins = res.data.coins || []
+        setMyCoins(coins)
+        if (preselectedCoinId) {
+          const coin = coins.find((c) => c.id === preselectedCoinId)
+          if (coin) handleSelectCoin(coin)
+        }
+      })
       .catch(() => {})
       .finally(() => setIsLoadingCoins(false))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleSelectCoin = (coin) => {

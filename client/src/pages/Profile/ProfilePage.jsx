@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { LogOut, Crown, Trophy, Flame, Star, Award, ChevronRight, Settings } from 'lucide-react'
-import { userAPI, subscribeAPI, leaderboardAPI } from '../../api/client'
+import { LogOut, Crown, Bell, X, Flame } from 'lucide-react'
+import apiClient, { userAPI, subscribeAPI, leaderboardAPI } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import { formatCurrency, getInitials, calculateProgress } from '../../utils/helpers'
 
@@ -99,8 +99,29 @@ export default function ProfilePage() {
   const [isUpgrading, setIsUpgrading] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [notifications, setNotifications] = useState([])
+  const [showNotifications, setShowNotifications] = useState(false)
+  const [unreadNotifs, setUnreadNotifs] = useState(0)
 
   useEffect(() => {
+    // Handle Stripe return
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('subscribed') === 'true') {
+      window.history.replaceState({}, '', window.location.pathname)
+      subscribeAPI.getStatus().then((res) => {
+        setSubStatus(res.data)
+        updateUser({ subscription_tier: res.data.tier })
+      }).catch(() => {})
+    }
+  }, [updateUser])
+
+  useEffect(() => {
+    userAPI.getNotifications()
+      .then((res) => {
+        setNotifications(res.data.notifications || [])
+        setUnreadNotifs(res.data.unread || 0)
+      }).catch(() => {})
+
     userAPI.getStats()
       .then((res) => setStats(res.data.stats || res.data))
       .catch(() => {})
@@ -122,7 +143,10 @@ export default function ProfilePage() {
   const handleUpgrade = async (tier) => {
     setIsUpgrading(true)
     try {
-      const res = await subscribeAPI.subscribe(tier)
+      const res = await subscribeAPI.subscribe(tier, {
+        successUrl: `${window.location.origin}/profile?subscribed=true`,
+        cancelUrl: `${window.location.origin}/profile`,
+      })
       if (res.data.url) {
         window.location.href = res.data.url
       } else if (res.data.success) {
@@ -160,12 +184,25 @@ export default function ProfilePage() {
       {/* Header */}
       <div className="sticky top-0 z-10 bg-[#0F0F0F]/95 backdrop-blur-sm border-b border-[#2A2A2A] px-4 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold font-display text-white">Profile</h1>
-        <button
-          onClick={logout}
-          className="w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center"
-        >
-          <LogOut size={16} className="text-gray-400" />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowNotifications(true)}
+            className="relative w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center"
+          >
+            <Bell size={16} className="text-gray-400" />
+            {unreadNotifs > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                {unreadNotifs > 9 ? '9+' : unreadNotifs}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={logout}
+            className="w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center"
+          >
+            <LogOut size={16} className="text-gray-400" />
+          </button>
+        </div>
       </div>
 
       {/* Profile hero */}
@@ -341,6 +378,49 @@ export default function ProfilePage() {
         {/* Leaderboard tab */}
         {activeTab === 'leaderboard' && <LeaderboardTab currentUserId={user?.id} />}
       </div>
+
+      {/* Notifications sheet */}
+      {showNotifications && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-end">
+          <div className="bg-[#1A1A1A] border-t border-[#2A2A2A] rounded-t-2xl w-full max-w-[430px] mx-auto flex flex-col" style={{ maxHeight: '70vh' }}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#2A2A2A]">
+              <h3 className="text-white font-display font-bold text-base">Notifications</h3>
+              <div className="flex items-center gap-2">
+                {unreadNotifs > 0 && (
+                  <button
+                    onClick={() => {
+                      apiClient.put('/user/notifications/read-all').catch(() => {})
+                      setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+                      setUnreadNotifs(0)
+                    }}
+                    className="text-[#D4A017] text-xs font-body"
+                  >
+                    Mark all read
+                  </button>
+                )}
+                <button onClick={() => setShowNotifications(false)} className="w-8 h-8 rounded-full bg-[#2A2A2A] flex items-center justify-center">
+                  <X size={16} className="text-gray-400" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto scrollbar-none divide-y divide-[#2A2A2A]">
+              {notifications.length === 0 ? (
+                <p className="text-gray-500 text-sm font-body text-center py-10">No notifications yet</p>
+              ) : (
+                notifications.map((n) => (
+                  <div key={n.id} className={`px-4 py-3 flex items-start gap-3 ${!n.read ? 'bg-[#D4A017]/5' : ''}`}>
+                    <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${!n.read ? 'bg-[#D4A017]' : 'bg-transparent'}`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-body font-semibold">{n.title}</p>
+                      <p className="text-gray-400 text-xs font-body leading-snug mt-0.5">{n.message}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
