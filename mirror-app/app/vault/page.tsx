@@ -46,7 +46,7 @@ export default async function VaultPage() {
 
   if (cutoff) query = query.gte('created_at', cutoff)
 
-  const { data: memoriesRaw, count } = await supabase
+  const { count } = await supabase
     .from('memories')
     .select('id', { count: 'exact', head: true })
     .eq('user_id', user.id)

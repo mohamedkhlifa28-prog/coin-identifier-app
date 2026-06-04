@@ -54,6 +54,10 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
 
   const plan = user.plan as Plan
 
+  const inactiveDays = user.last_active
+    ? Math.floor((Date.now() - new Date(user.last_active).getTime()) / 86_400_000)
+    : 0
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -295,6 +299,13 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
 
       {/* Main chat area */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Inactivity banner */}
+        {inactiveDays >= 1 && (
+          <div className="bg-[#a78bfa]/10 border-b border-[#a78bfa]/20 px-4 py-2 text-center text-xs text-[#a78bfa]">
+            Your Mirror hasn&apos;t heard from you in {inactiveDays} day{inactiveDays !== 1 ? 's' : ''}. Welcome back.
+          </div>
+        )}
+
         {/* Header */}
         <header className="h-14 border-b border-[#1f1f1f] flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-3">

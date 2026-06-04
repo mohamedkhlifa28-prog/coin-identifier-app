@@ -166,7 +166,7 @@ export function SharedMirrorClient({ slug, ownerName }: SharedMirrorClientProps)
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKey}
             placeholder={
-              msgCount >= GUEST_LIMIT ? 'Message limit reached' : `Message ${ownerName}&apos;s Mirror…`
+              msgCount >= GUEST_LIMIT ? 'Message limit reached' : `Message ${ownerName}'s Mirror…`
             }
             disabled={streaming || msgCount >= GUEST_LIMIT}
             className="flex-1 bg-[#111111] border border-[#1f1f1f] focus:border-[#a78bfa]/50 rounded-xl px-4 py-3 text-sm text-[#f0f0f0] placeholder-[#444] outline-none transition-colors disabled:opacity-50"

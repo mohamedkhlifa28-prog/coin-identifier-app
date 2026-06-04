@@ -27,12 +27,7 @@ export async function POST(request: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Mirror not found or inactive' }, { status: 404 })
   }
 
-  // Increment view count (best effort)
-  supabase
-    .from('shared_mirrors')
-    .update({ views: supabase.rpc('increment', { x: 1 }) })
-    .eq('slug', slug)
-    .then(() => {})
+  // View count incremented by the page server component on load
 
   // Load owner's user + voice profile
   const [{ data: owner }, { data: profile }] = await Promise.all([
