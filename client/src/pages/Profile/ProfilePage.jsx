@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { LogOut, Crown, Bell, X, Flame } from 'lucide-react'
+import { LogOut, Crown, Bell, X, Flame, MessageCircle, CircleDollarSign } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import apiClient, { userAPI, subscribeAPI, leaderboardAPI } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import { formatCurrency, getInitials, calculateProgress } from '../../utils/helpers'
@@ -90,6 +91,7 @@ function LeaderboardTab({ currentUserId }) {
 
 export default function ProfilePage() {
   const { user, logout, updateUser } = useAuth()
+  const navigate = useNavigate()
 
   const [stats, setStats] = useState(null)
   const [badges, setBadges] = useState([])
@@ -185,6 +187,13 @@ export default function ProfilePage() {
       <div className="sticky top-0 z-10 bg-[#0F0F0F]/95 backdrop-blur-sm border-b border-[#2A2A2A] px-4 py-4 flex items-center justify-between">
         <h1 className="text-xl font-bold font-display text-white">Profile</h1>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => navigate('/messages')}
+            className="w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center"
+            aria-label="Messages"
+          >
+            <MessageCircle size={16} className="text-gray-400" />
+          </button>
           <button
             onClick={() => setShowNotifications(true)}
             className="relative w-9 h-9 rounded-full bg-[#1A1A1A] flex items-center justify-center"
@@ -298,6 +307,14 @@ export default function ProfilePage() {
               {tier !== 'free' && (
                 <>
                   <p className="text-gray-400 text-xs font-body">Unlimited scans · AI Grading · Error Detection</p>
+                  <button
+                    onClick={() => navigate('/crh')}
+                    className="mt-3 flex items-center gap-2 w-full bg-[#2A2A2A] rounded-xl px-3 py-2.5 text-left active:opacity-80"
+                  >
+                    <CircleDollarSign size={14} className="text-[#D4A017]" />
+                    <span className="text-white text-xs font-body font-semibold">CRH Tracker</span>
+                    <span className="ml-auto text-gray-500 text-xs font-body">→</span>
+                  </button>
                   {!showCancelConfirm ? (
                     <button
                       onClick={() => setShowCancelConfirm(true)}
