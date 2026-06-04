@@ -10,14 +10,15 @@ import { createServiceClient } from '@/lib/supabase'
 import Stripe from 'stripe'
 
 function getStripeInstance() {
-  return new (require('stripe').default)(process.env.STRIPE_SECRET_KEY!, {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
     apiVersion: '2026-05-27.dahlia',
-  }) as Stripe
+  })
 }
 
 function getPlanFromPriceId(priceId: string): 'pro' | 'platinum' | 'free' {
   if (priceId === process.env.STRIPE_PRO_PRICE_ID) return 'pro'
   if (priceId === process.env.STRIPE_PLATINUM_PRICE_ID) return 'platinum'
+  console.warn(`[Stripe] Unknown price ID: ${priceId} — defaulting to free`)
   return 'free'
 }
 

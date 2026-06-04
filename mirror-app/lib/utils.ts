@@ -8,7 +8,11 @@ export function stripMarkdownCodeBlocks(text: string): string {
 
 export function parseClaudeJSON<T>(raw: string): T {
   const cleaned = stripMarkdownCodeBlocks(raw)
-  return JSON.parse(cleaned) as T
+  try {
+    return JSON.parse(cleaned) as T
+  } catch {
+    throw new Error(`Failed to parse Claude JSON: ${cleaned.slice(0, 200)}`)
+  }
 }
 
 export function cn(...classes: (string | undefined | null | false)[]): string {

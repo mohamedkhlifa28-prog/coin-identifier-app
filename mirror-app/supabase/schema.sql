@@ -48,13 +48,18 @@ CREATE TABLE memories (
   embedding VECTOR(1536)  -- pgvector embedding
 );
 CREATE INDEX ON memories USING ivfflat (embedding vector_cosine_ops);
+CREATE INDEX memories_user_id_idx ON memories(user_id);
+CREATE INDEX memories_created_at_idx ON memories(created_at);
+CREATE INDEX conversations_user_id_idx ON conversations(user_id, session_date);
+CREATE INDEX contradictions_user_id_idx ON contradictions(user_id);
+CREATE INDEX shared_mirrors_user_id_idx ON shared_mirrors(user_id);
 
 -- Contradiction pairs detected between memories
 CREATE TABLE contradictions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-  memory_id_1 UUID REFERENCES memories(id),
-  memory_id_2 UUID REFERENCES memories(id),
+  memory_id_1 UUID REFERENCES memories(id) ON DELETE CASCADE,
+  memory_id_2 UUID REFERENCES memories(id) ON DELETE CASCADE,
   explanation TEXT,
   detected_at TIMESTAMPTZ DEFAULT NOW()
 );

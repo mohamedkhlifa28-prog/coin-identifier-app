@@ -16,5 +16,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
     model: EMBEDDING_MODEL,
     input: text,
   })
-  return response.data[0].embedding
+  const embedding = response.data?.[0]?.embedding
+  if (!embedding) throw new Error('No embedding returned from OpenAI')
+  return embedding
 }
