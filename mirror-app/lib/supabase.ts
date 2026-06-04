@@ -1,21 +1,26 @@
+import { createBrowserClient } from '@supabase/ssr'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 
-// Lazy singleton — avoids crashing during Next.js SSG when env vars aren't set
-let _supabase: SupabaseClient | null = null
+type BrowserClient = ReturnType<typeof createBrowserClient>
 
-export function getSupabase(): SupabaseClient {
+// Lazy singleton — avoids crashing during Next.js SSG when env vars aren't set
+// Uses createBrowserClient so sessions are stored in cookies (not localStorage),
+// making them readable by the server-side middleware.
+let _supabase: BrowserClient | null = null
+
+export function getSupabase(): BrowserClient {
   if (!_supabase) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    _supabase = createClient(url, key)
+    _supabase = createBrowserClient(url, key)
   }
   return _supabase
 }
 
 // Convenience proxy — equivalent to calling getSupabase() directly
-export const supabase = new Proxy({} as SupabaseClient, {
+export const supabase = new Proxy({} as BrowserClient, {
   get(_target, prop) {
-    return getSupabase()[prop as keyof SupabaseClient]
+    return getSupabase()[prop as keyof BrowserClient]
   },
 })
 
