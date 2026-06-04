@@ -6,6 +6,7 @@ const { authMiddleware } = require('../middleware/auth');
 const db = require('../db/database');
 const claude = require('../services/claude');
 const { awardXP } = require('../utils/xp');
+const { awardBadge } = require('../utils/badges');
 
 const router = express.Router();
 
@@ -66,6 +67,10 @@ router.post('/', authMiddleware, async (req, res) => {
 
     // Award +10 XP
     const xpResult = awardXP(db, user.id, 10, 'coin_scan');
+
+    // Badge: first scan
+    const io = req.app.get('io');
+    awardBadge(db, user.id, 'scan_1', io);
 
     // Update scan count
     db.prepare('UPDATE users SET scan_count_month = ?, scan_month = ? WHERE id = ?')

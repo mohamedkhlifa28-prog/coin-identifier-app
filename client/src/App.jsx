@@ -16,6 +16,8 @@ import CreateListing from './pages/Marketplace/CreateListing'
 import ListingDetail from './pages/Marketplace/ListingDetail'
 import CommunityFeed from './pages/Community/CommunityFeed'
 import ProfilePage from './pages/Profile/ProfilePage'
+import MessagesPage from './pages/Messages/MessagesPage'
+import CRHPage from './pages/CRH/CRHPage'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, isLoading } = useAuth()
@@ -149,6 +151,37 @@ export default function App() {
           <ProtectedRoute>
             <AppShell>
               <ProfilePage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/messages"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <MessagesPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/messages/:userId"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <MessagesPage />
+            </AppShell>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/crh"
+        element={
+          <ProtectedRoute>
+            <AppShell>
+              <CRHPage />
             </AppShell>
           </ProtectedRoute>
         }

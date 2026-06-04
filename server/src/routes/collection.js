@@ -5,6 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 const { authMiddleware } = require('../middleware/auth');
 const db = require('../db/database');
 const { awardXP } = require('../utils/xp');
+const { awardBadge } = require('../utils/badges');
 
 const router = express.Router();
 
@@ -148,6 +149,24 @@ router.post('/', authMiddleware, (req, res) => {
 
   const xpResult = awardXP(db, userId, 5, 'add_coin');
   const coin = db.prepare('SELECT * FROM user_coins WHERE id = ?').get(id);
+
+  // Badge checks
+  const io = req.app.get('io');
+  const coinCount = db.prepare('SELECT COUNT(*) as cnt FROM user_coins WHERE user_id = ?').get(userId).cnt;
+  if (coinCount >= 10) awardBadge(db, userId, 'collect_10', io);
+
+  // Century Club: coin older than 100 years
+  const currentYear = new Date().getFullYear();
+  if (year && (currentYear - parseInt(year, 10)) >= 100) awardBadge(db, userId, 'old_coin', io);
+
+  // Silver Tongue: own 5 silver coins (check by composition in ai_data or coin name)
+  const silverCount = db.prepare(`
+    SELECT COUNT(*) as cnt FROM user_coins
+    WHERE user_id = ? AND (
+      LOWER(ai_data) LIKE '%silver%' OR LOWER(name) LIKE '%silver%'
+    )
+  `).get(userId).cnt;
+  if (silverCount >= 5) awardBadge(db, userId, 'silver_5', io);
 
   return res.status(201).json({
     coin: { ...coin, images: JSON.parse(coin.images), ai_data: JSON.parse(coin.ai_data) },
