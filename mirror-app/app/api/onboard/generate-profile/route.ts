@@ -127,18 +127,33 @@ ${writingSamples[2]}`
     const profileData = parseClaudeJSON<VoiceProfileData>(rawContent.text)
     profileData.accuracy_score = 40
 
-    // Upsert voice profile
-    const { error: dbError } = await supabase.from('voice_profiles').upsert(
-      {
+    // Save voice profile — check if one exists first, then insert or update
+    const { data: existing } = await supabase
+      .from('voice_profiles')
+      .select('id')
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    let dbError
+    if (existing) {
+      ;({ error: dbError } = await supabase
+        .from('voice_profiles')
+        .update({
+          profile_json: profileData,
+          accuracy_score: 40,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id))
+    } else {
+      ;({ error: dbError } = await supabase.from('voice_profiles').insert({
         user_id: user.id,
         profile_json: profileData,
         accuracy_score: 40,
         version: 1,
         total_sessions: 0,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: 'user_id' }
-    )
+      }))
+    }
 
     if (dbError) {
       return NextResponse.json({ error: dbError.message }, { status: 500 })
