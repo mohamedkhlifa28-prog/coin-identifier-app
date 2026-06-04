@@ -69,11 +69,9 @@ export async function POST(request: NextRequest) {
 
     const { voice_id } = (await elRes.json()) as { voice_id: string }
 
-    // Save (or replace) the voice clone record
-    await supabase.from('voice_clones').upsert(
-      { user_id: user.id, elevenlabs_voice_id: voice_id },
-      { onConflict: 'user_id' }
-    )
+    // Save voice clone — delete any existing record first, then insert
+    await supabase.from('voice_clones').delete().eq('user_id', user.id)
+    await supabase.from('voice_clones').insert({ user_id: user.id, elevenlabs_voice_id: voice_id })
 
     return NextResponse.json({ success: true, voice_id })
   } catch (err) {
