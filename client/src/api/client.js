@@ -52,10 +52,10 @@ export const userAPI = {
 export const scanAPI = {
   scanCoin: (imageBase64, mimeType = 'image/jpeg') =>
     apiClient.post('/scan', { imageBase64, mimeType }),
-  gradeCoin: (imageBase64, coinId) =>
-    apiClient.post('/scan/grade', { image: imageBase64, coinId }),
-  detectErrors: (imageBase64, coinId) =>
-    apiClient.post('/scan/errors', { image: imageBase64, coinId }),
+  gradeCoin: (obverseBase64, reverseBase64, mimeType = 'image/jpeg') =>
+    apiClient.post('/scan/grade', { obverseBase64, reverseBase64, mimeType }),
+  detectErrors: (imageBase64, mimeType = 'image/jpeg') =>
+    apiClient.post('/scan/error-detect', { imageBase64, mimeType }),
 }
 
 // Collection API
@@ -74,9 +74,9 @@ export const marketplaceAPI = {
   createListing: (data) => apiClient.post('/marketplace', data),
   getListing: (id) => apiClient.get(`/marketplace/${id}`),
   makeOffer: (id, offerData) =>
-    apiClient.post(`/marketplace/${id}/offers`, offerData),
+    apiClient.post(`/marketplace/${id}/offer`, offerData),
   toggleWatchlist: (id) =>
-    apiClient.post(`/marketplace/${id}/watchlist`),
+    apiClient.post(`/marketplace/${id}/watch`),
   getWatchlist: () => apiClient.get('/marketplace/watchlist'),
 }
 
@@ -87,7 +87,7 @@ export const feedAPI = {
   likePost: (id) => apiClient.post(`/feed/${id}/like`),
   getPost: (id) => apiClient.get(`/feed/${id}`),
   addComment: (id, comment) =>
-    apiClient.post(`/feed/${id}/comments`, { comment }),
+    apiClient.post(`/feed/${id}/comment`, { comment }),
   getTrending: () => apiClient.get('/feed/trending'),
 }
 

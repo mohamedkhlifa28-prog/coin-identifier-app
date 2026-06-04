@@ -63,7 +63,7 @@ export default function ListingDetail() {
     setIsMakingOffer(true)
     try {
       await marketplaceAPI.makeOffer(id, {
-        price: Number(offerPrice),
+        amount: Number(offerPrice),
         message: offerMessage,
       })
       setOfferSuccess(true)
