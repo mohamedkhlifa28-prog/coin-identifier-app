@@ -34,14 +34,15 @@ export async function DELETE(_request: NextRequest) {
 
     const service = createServiceClient()
 
-    // Delete public user row first (cascades to memories, conversations, voice_profiles, etc.)
-    await service.from('users').delete().eq('id', user.id)
-
-    // Delete the Supabase auth user
-    const { error } = await service.auth.admin.deleteUser(user.id)
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    // Delete auth user first — if this fails, all data is still intact and the user can retry.
+    // Deleting data first (old order) would leave an orphaned auth record on failure.
+    const { error: authError } = await service.auth.admin.deleteUser(user.id)
+    if (authError) {
+      return NextResponse.json({ error: authError.message }, { status: 500 })
     }
+
+    // Auth record is gone; now delete the public user row (cascades to all child tables)
+    await service.from('users').delete().eq('id', user.id)
 
     return NextResponse.json({ success: true })
   } catch (err) {

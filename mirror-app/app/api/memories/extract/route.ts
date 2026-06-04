@@ -208,13 +208,14 @@ User message: "${userMessage}"`
   // Bonus +0.3 on top when new traits are actually learned. Cap at 98.
   const baseAccuracy = profileRow.accuracy_score ?? 40
   const accuracyDelta = hasUpdates ? 0.5 : 0.2
-  const newAccuracy = Math.min(98, baseAccuracy + accuracyDelta)
+  // Round once here so profile_json.accuracy_score and the dedicated column stay identical
+  const newAccuracy = Math.min(98, Math.round(baseAccuracy + accuracyDelta))
 
   if (!hasUpdates) {
     // No new traits — just persist the accuracy nudge
     await supabase
       .from('voice_profiles')
-      .update({ accuracy_score: Math.round(newAccuracy), updated_at: new Date().toISOString() })
+      .update({ accuracy_score: newAccuracy, updated_at: new Date().toISOString() })
       .eq('user_id', userId)
     return
   }
@@ -234,13 +235,13 @@ User message: "${userMessage}"`
     }
   }
 
-  updatedProfile.accuracy_score = newAccuracy
+  updatedProfile.accuracy_score = newAccuracy  // already rounded above
 
   await supabase
     .from('voice_profiles')
     .update({
       profile_json: updatedProfile,
-      accuracy_score: Math.round(newAccuracy),
+      accuracy_score: newAccuracy,
       updated_at: new Date().toISOString(),
     })
     .eq('user_id', userId)

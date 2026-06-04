@@ -28,15 +28,16 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session — required by @supabase/ssr to keep tokens alive
+  const { pathname } = request.nextUrl
+
+  // Skip auth entirely for public paths — no token refresh needed and saves a round-trip
+  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
+  if (isPublic) return supabaseResponse
+
+  // Refresh session — required by @supabase/ssr to keep tokens alive on protected routes
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const { pathname } = request.nextUrl
-
-  const isPublic = PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))
-  if (isPublic) return supabaseResponse
 
   const isProtected = PROTECTED.some((p) => pathname.startsWith(p))
   if (isProtected && !user) {
