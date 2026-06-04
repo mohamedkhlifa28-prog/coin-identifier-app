@@ -117,3 +117,55 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- RPC: semantic memory search using pgvector cosine similarity
+CREATE OR REPLACE FUNCTION search_memories(
+  user_id_param UUID,
+  query_embedding VECTOR(1536),
+  similarity_threshold FLOAT DEFAULT 0.75,
+  match_count INT DEFAULT 5
+)
+RETURNS TABLE (
+  id UUID,
+  quote TEXT,
+  context TEXT,
+  tags TEXT[],
+  weight INT,
+  pinned BOOLEAN,
+  created_at TIMESTAMPTZ,
+  similarity FLOAT
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    m.id,
+    m.quote,
+    m.context,
+    m.tags,
+    m.weight,
+    m.pinned,
+    m.created_at,
+    1 - (m.embedding <=> query_embedding) AS similarity
+  FROM memories m
+  WHERE
+    m.user_id = user_id_param
+    AND m.embedding IS NOT NULL
+    AND 1 - (m.embedding <=> query_embedding) >= similarity_threshold
+  ORDER BY m.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+-- RPC: increment total_sessions on voice profile
+CREATE OR REPLACE FUNCTION increment_voice_profile_sessions(uid UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE voice_profiles
+  SET total_sessions = total_sessions + 1
+  WHERE user_id = uid;
+END;
+$$;
