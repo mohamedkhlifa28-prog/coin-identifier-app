@@ -63,6 +63,19 @@ export default async function ChatPage() {
     })
     .eq('id', authUser.id)
 
+  // Accuracy decay: -2% if user hasn't chatted in 7+ days
+  if (daysSinceActive >= 7) {
+    const currentAccuracy = profileResult.data.accuracy_score ?? 40
+    const decayed = Math.max(40, currentAccuracy - 2)
+    if (decayed !== currentAccuracy) {
+      await supabase
+        .from('voice_profiles')
+        .update({ accuracy_score: decayed })
+        .eq('user_id', authUser.id)
+      profileResult.data.accuracy_score = decayed
+    }
+  }
+
   const user: User = {
     ...userResult.data,
     streak_days: newStreak,

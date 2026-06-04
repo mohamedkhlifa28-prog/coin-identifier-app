@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/detect-contradictions",
+      "schedule": "0 0 * * 0"
+    },
+    {
+      "path": "/api/cron/weekly-report",
+      "schedule": "0 8 * * 1"
+    }
+  ]
+}

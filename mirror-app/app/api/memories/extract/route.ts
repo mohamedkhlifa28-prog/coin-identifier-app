@@ -72,6 +72,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Check memory milestones (100, 500, 1000)
+    const { count: memoryCount } = await supabase
+      .from('memories')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+
+    const MILESTONES = [100, 500, 1000]
+    if (memoryCount && MILESTONES.includes(memoryCount)) {
+      console.log(`[Milestone] User ${userId} hit ${memoryCount} memories`)
+      // Push notification would go here — see lib/webpush.ts
+    }
+
     // Save conversation to DB (upsert by session_id stored as the conversation id)
     const allMessages = [
       ...conversationHistory,
