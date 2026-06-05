@@ -107,6 +107,11 @@ export async function POST(request: NextRequest) {
       .eq('id', sessionId)
       .maybeSingle()
 
+    const titleText = userMessage.trim()
+    const title = !existingConvo
+      ? titleText.slice(0, 60) + (titleText.length > 60 ? '…' : '')
+      : undefined
+
     await supabase
       .from('conversations')
       .upsert(
@@ -115,6 +120,7 @@ export async function POST(request: NextRequest) {
           user_id: userId,
           messages_json: allMessages,
           session_date: new Date().toISOString(),
+          ...(title !== undefined ? { title } : {}),
         },
         { onConflict: 'id' }
       )

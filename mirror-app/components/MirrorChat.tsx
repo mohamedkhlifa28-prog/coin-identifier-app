@@ -38,6 +38,12 @@ const NAV_LINKS = [
   { label: 'Settings', href: '/settings', icon: '⊙' },
 ]
 
+interface ConvSummary {
+  id: string
+  title: string | null
+  session_date: string
+}
+
 export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   const router = useRouter()
   const sessionId = useRef(crypto.randomUUID())
@@ -56,11 +62,58 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   const [langOpen, setLangOpen] = useState(false)
   const [langSearch, setLangSearch] = useState('')
   const langInputRef = useRef<HTMLInputElement>(null)
+  const [chatHistory, setChatHistory] = useState<ConvSummary[]>([])
+  const [currentConvId, setCurrentConvId] = useState<string | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mirror-language')
     if (stored) setLanguage(stored)
   }, [])
+
+  // Load conversation history on mount
+  useEffect(() => {
+    supabase
+      .from('conversations')
+      .select('id, title, session_date')
+      .eq('user_id', user.id)
+      .order('session_date', { ascending: false })
+      .limit(50)
+      .then(({ data }: { data: ConvSummary[] | null }) => { if (data) setChatHistory(data) })
+  }, [user.id])
+
+  async function loadConversation(convId: string) {
+    const { data } = await supabase
+      .from('conversations')
+      .select('id, messages_json')
+      .eq('id', convId)
+      .single()
+    if (!data) return
+    const loaded: ChatMessage[] = ((data.messages_json as any[]) ?? []).map((m: any) => ({
+      id: crypto.randomUUID(),
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+      timestamp: new Date(m.timestamp),
+    }))
+    setMessages(loaded)
+    setStreamingContent('')
+    setInput('')
+    setError(null)
+    sessionId.current = convId
+    setCurrentConvId(convId)
+    setSidebarOpen(false)
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+  }
+
+  async function refreshHistory() {
+    const { data } = await supabase
+      .from('conversations')
+      .select('id, title, session_date')
+      .eq('user_id', user.id)
+      .order('session_date', { ascending: false })
+      .limit(50)
+    if (data) setChatHistory(data)
+    setCurrentConvId(sessionId.current)
+  }
 
   function newChat() {
     setMessages([])
@@ -68,6 +121,7 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
     setInput('')
     setError(null)
     sessionId.current = crypto.randomUUID()
+    setCurrentConvId(null)
     setSidebarOpen(false)
     setTimeout(() => inputRef.current?.focus(), 100)
   }
@@ -117,6 +171,8 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
             .eq('user_id', user.id)
             .single()
           if (data) setAccuracy(data.accuracy_score ?? accuracy)
+          // Refresh conversation list so new session appears in sidebar
+          refreshHistory()
         }
       } catch {
         // Background job — swallow errors silently
@@ -258,8 +314,8 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
           </div>
         </div>
 
-        {/* New Chat + Redo Onboarding */}
-        <div className="px-3 py-3 border-b border-[#1f1f1f] space-y-0.5">
+        {/* New Chat */}
+        <div className="px-3 py-3 border-b border-[#1f1f1f]">
           <button
             onClick={newChat}
             className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f] transition-colors"
@@ -267,50 +323,76 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
             <span className="text-base">✦</span>
             New Chat
           </button>
-          <Link
-            href="/onboard"
-            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f] transition-colors"
-          >
-            <span className="text-base">↺</span>
-            Redo Onboarding
-          </Link>
         </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV_LINKS.map((link) => {
-            const isActive = link.href === '/chat'
-            const isLocked =
-              link.href === '/generate' && plan === 'free'
-            return (
-              <Link
-                key={link.href}
-                href={isLocked ? '#' : link.href}
-                onClick={
-                  isLocked
-                    ? (e) => {
-                        e.preventDefault()
-                        setUpgradeModal('Content Generator is a Pro feature.')
-                      }
-                    : undefined
-                }
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                  isActive
-                    ? 'bg-[#a78bfa]/10 text-[#a78bfa]'
-                    : 'text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f]'
-                }`}
-              >
-                <span className="text-base">{link.icon}</span>
-                {link.label}
-                {isLocked && (
-                  <span className="ml-auto text-[10px] text-[#555] uppercase tracking-wide">
-                    Pro
-                  </span>
-                )}
-              </Link>
-            )
-          })}
-        </nav>
+        {/* Scrollable middle: conversation history + nav */}
+        <div className="flex-1 overflow-y-auto flex flex-col min-h-0">
+          {/* Conversation history */}
+          <div className="px-3 py-3 border-b border-[#1f1f1f]">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-[#333] px-3 mb-1.5">Chats</p>
+            {chatHistory.length === 0 ? (
+              <p className="text-xs text-[#333] px-3 py-2">No conversations yet</p>
+            ) : (
+              <div className="space-y-0.5">
+                {chatHistory.map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => loadConversation(conv.id)}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors truncate block ${
+                      currentConvId === conv.id
+                        ? 'bg-[#a78bfa]/10 text-[#a78bfa]'
+                        : 'text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f]'
+                    }`}
+                  >
+                    {conv.title ?? 'New conversation'}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Navigation */}
+          <nav className="px-3 py-4 space-y-0.5">
+            {NAV_LINKS.map((link) => {
+              const isActive = link.href === '/chat'
+              const isLocked = link.href === '/generate' && plan === 'free'
+              return (
+                <Link
+                  key={link.href}
+                  href={isLocked ? '#' : link.href}
+                  onClick={
+                    isLocked
+                      ? (e) => {
+                          e.preventDefault()
+                          setUpgradeModal('Content Generator is a Pro feature.')
+                        }
+                      : undefined
+                  }
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
+                    isActive
+                      ? 'bg-[#a78bfa]/10 text-[#a78bfa]'
+                      : 'text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f]'
+                  }`}
+                >
+                  <span className="text-base">{link.icon}</span>
+                  {link.label}
+                  {isLocked && (
+                    <span className="ml-auto text-[10px] text-[#555] uppercase tracking-wide">
+                      Pro
+                    </span>
+                  )}
+                </Link>
+              )
+            })}
+            <Link
+              href="/onboard"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f] transition-colors"
+            >
+              <span className="text-base">↺</span>
+              Redo Onboarding
+            </Link>
+          </nav>
+        </div>
 
         {/* Upgrade CTA for free users */}
         {plan === 'free' && (

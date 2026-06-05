@@ -31,8 +31,11 @@ CREATE TABLE conversations (
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
   messages_json JSONB NOT NULL DEFAULT '[]',
   traits_extracted JSONB DEFAULT '[]',
+  title TEXT,
   session_date TIMESTAMPTZ DEFAULT NOW()
 );
+-- Run this if conversations table already exists:
+-- ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title TEXT;
 
 -- Memory bank — every notable quote or moment the user has said
 CREATE TABLE memories (
