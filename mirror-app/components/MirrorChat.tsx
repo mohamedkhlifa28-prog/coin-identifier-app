@@ -258,8 +258,8 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
           </div>
         </div>
 
-        {/* New Chat */}
-        <div className="px-3 py-3 border-b border-[#1f1f1f]">
+        {/* New Chat + Redo Onboarding */}
+        <div className="px-3 py-3 border-b border-[#1f1f1f] space-y-0.5">
           <button
             onClick={newChat}
             className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f] transition-colors"
@@ -267,6 +267,13 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
             <span className="text-base">✦</span>
             New Chat
           </button>
+          <Link
+            href="/onboard"
+            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f] transition-colors"
+          >
+            <span className="text-base">↺</span>
+            Redo Onboarding
+          </Link>
         </div>
 
         {/* Navigation */}
