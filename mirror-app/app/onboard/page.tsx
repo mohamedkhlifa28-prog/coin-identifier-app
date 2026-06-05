@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, KeyboardEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { LanguageSelector } from '@/components/LanguageSelector'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -268,9 +269,10 @@ export default function OnboardPage() {
         </button>
       )}
 
-      {/* Skip counter (subtle — not a call to action) */}
-      <div className="fixed top-5 right-6 z-20 text-xs text-[#333]">
-        {currentStep + 1} / {TOTAL_STEPS}
+      {/* Top-right: language selector + step counter */}
+      <div className="fixed top-4 right-4 z-20 flex items-center gap-3">
+        <LanguageSelector compact />
+        <span className="text-xs text-[#333]">{currentStep + 1} / {TOTAL_STEPS}</span>
       </div>
 
       {/* Steps */}
