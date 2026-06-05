@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-// Routes that don't require authentication
-const PUBLIC_PATHS = ['/', '/login', '/signup', '/pricing', '/mirror']
+const PROTECTED = ['/chat', '/vault', '/settings', '/generate', '/onboard']
+const AUTH_PAGES = ['/login', '/signup']
+const PUBLIC_PREFIXES = ['/api/webhooks', '/api/cron', '/api/mirror', '/mirror', '/pricing']
 
 function isPublicPath(pathname: string): boolean {
   return (
-    PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(p + '/')) ||
-    pathname.startsWith('/api/webhooks') ||
-    pathname.startsWith('/api/cron') ||
-    pathname.startsWith('/api/mirror') ||
+    pathname === '/' ||
+    PUBLIC_PREFIXES.some((p) => pathname.startsWith(p)) ||
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
     pathname.startsWith('/sw.js')
@@ -48,15 +47,25 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (!user) {
-    const loginUrl = new URL('/login', request.url)
-    loginUrl.searchParams.set('redirect', pathname)
-    return NextResponse.redirect(loginUrl)
+  const isProtected = PROTECTED.some((p) => pathname.startsWith(p))
+  if (isProtected && !user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/login'
+    return NextResponse.redirect(url)
+  }
+
+  const isAuthPage = AUTH_PAGES.some((p) => pathname.startsWith(p))
+  if (isAuthPage && user) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/chat'
+    return NextResponse.redirect(url)
   }
 
   return response
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/((?!_next/static|_next/image|favicon\\.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+  ],
 }
