@@ -119,7 +119,12 @@ export function getStoredLanguage(): string {
 }
 
 export function useLanguage() {
-  const [language, setLanguageState] = useState<string>(() => getStoredLanguage())
+  const [language, setLanguageState] = useState('English')
+
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) setLanguageState(stored)
+  }, [])
 
   function setLanguage(lang: string) {
     setLanguageState(lang)
