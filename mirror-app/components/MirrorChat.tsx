@@ -17,6 +17,7 @@ import { MirrorAge } from './MirrorAge'
 import { PlanBadge } from './PlanBadge'
 import { UpgradeModal } from './UpgradeModal'
 import type { User, VoiceProfile, Plan } from '@/types'
+import { LanguageSelector, getStoredLanguage } from './LanguageSelector'
 
 interface ChatMessage {
   id: string
@@ -131,6 +132,7 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
           message: text,
           history,
           sessionId: sessionId.current,
+          language: getStoredLanguage(),
         }),
       })
 
@@ -287,6 +289,11 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
             </Link>
           </div>
         )}
+
+        {/* Language */}
+        <div className="mx-3 mb-1">
+          <LanguageSelector />
+        </div>
 
         {/* Sign out */}
         <button

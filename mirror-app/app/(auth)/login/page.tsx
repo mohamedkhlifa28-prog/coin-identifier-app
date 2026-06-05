@@ -4,6 +4,7 @@ import { useState, FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
+import { LanguageSelector } from '@/components/LanguageSelector'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -54,6 +55,10 @@ export default function LoginPage() {
 
   return (
     <div className="w-full max-w-md animate-fade-in-up">
+      {/* Language selector — top right */}
+      <div className="fixed top-4 right-4 z-10">
+        <LanguageSelector compact />
+      </div>
       <div className="text-center mb-10">
         <h1 className="text-4xl font-light tracking-tight text-[#f0f0f0] mb-2">
           Mirror

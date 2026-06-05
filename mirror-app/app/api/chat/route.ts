@@ -42,7 +42,8 @@ async function countTodayMessages(
 function buildSystemPrompt(
   userName: string,
   profile: VoiceProfileData,
-  memories: Memory[]
+  memories: Memory[],
+  language = 'English'
 ): string {
   const formalityLabel =
     profile.formality_level <= 3 ? 'very casual' :
@@ -85,7 +86,12 @@ Reference style: "You literally told me [quote]" or "Remember when you said [quo
 Make it feel like someone who was there and remembers, not a database lookup.`
       : ''
 
-  return `You are ${userName}'s Mirror — an AI alter ego trained to think, speak, and respond exactly like ${userName}.
+  const languageInstruction =
+    language && language !== 'English'
+      ? `LANGUAGE: Respond entirely in ${language}. Every message you send must be in ${language}. Keep ${userName}'s personality, voice, humour, and style — just express it in ${language}.\n\n`
+      : ''
+
+  return `${languageInstruction}You are ${userName}'s Mirror — an AI alter ego trained to think, speak, and respond exactly like ${userName}.
 
 ━━━ CRITICAL: OPERATIONAL REQUESTS ━━━
 Some messages are NOT conversation topics — they are requests to change how the Mirror works. You MUST detect these and respond with a redirect, NOT by trying to do the thing.
@@ -187,10 +193,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { message, history = [], sessionId } = body as {
+    const { message, history = [], sessionId, language = 'English' } = body as {
       message: string
       history: { role: 'user' | 'assistant'; content: string }[]
       sessionId: string
+      language?: string
     }
 
     if (!message?.trim()) {
@@ -217,7 +224,7 @@ export async function POST(request: NextRequest) {
       // Memory search is non-critical — continue without memories if it fails
     }
 
-    const systemPrompt = buildSystemPrompt(userName, voiceProfile, relevantMemories)
+    const systemPrompt = buildSystemPrompt(userName, voiceProfile, relevantMemories, language)
 
     // Build messages for Claude (current session history + new message)
     const anthropicMessages = [
