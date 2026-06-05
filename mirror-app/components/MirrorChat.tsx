@@ -17,7 +17,7 @@ import { MirrorAge } from './MirrorAge'
 import { PlanBadge } from './PlanBadge'
 import { UpgradeModal } from './UpgradeModal'
 import type { User, VoiceProfile, Plan } from '@/types'
-import { LanguageSelector, getStoredLanguage } from './LanguageSelector'
+import { LANGUAGES } from './LanguageSelector'
 
 interface ChatMessage {
   id: string
@@ -52,6 +52,25 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   const [error, setError] = useState<string | null>(null)
   const [upgradeModal, setUpgradeModal] = useState<string | false>(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [language, setLanguage] = useState('English')
+  const [langOpen, setLangOpen] = useState(false)
+  const [langSearch, setLangSearch] = useState('')
+  const langInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const stored = localStorage.getItem('mirror-language')
+    if (stored) setLanguage(stored)
+  }, [])
+
+  function newChat() {
+    setMessages([])
+    setStreamingContent('')
+    setInput('')
+    setError(null)
+    sessionId.current = crypto.randomUUID()
+    setSidebarOpen(false)
+    setTimeout(() => inputRef.current?.focus(), 100)
+  }
 
   const plan = user.plan as Plan
 
@@ -132,7 +151,7 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
           message: text,
           history,
           sessionId: sessionId.current,
-          language: getStoredLanguage(),
+          language,
         }),
       })
 
@@ -239,6 +258,17 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
           </div>
         </div>
 
+        {/* New Chat */}
+        <div className="px-3 py-3 border-b border-[#1f1f1f]">
+          <button
+            onClick={newChat}
+            className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f] transition-colors"
+          >
+            <span className="text-base">✦</span>
+            New Chat
+          </button>
+        </div>
+
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
           {NAV_LINKS.map((link) => {
@@ -290,11 +320,6 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
           </div>
         )}
 
-        {/* Language */}
-        <div className="mx-3 mb-1">
-          <LanguageSelector />
-        </div>
-
         {/* Sign out */}
         <button
           onClick={handleSignOut}
@@ -326,7 +351,17 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
               Talking to your Mirror
             </span>
           </div>
-          <AccuracyBadge score={accuracy} size="sm" showLabel={false} />
+          <div className="flex items-center gap-2">
+            {/* Language switcher */}
+            <button
+              onClick={() => { setLangSearch(''); setLangOpen(true); setTimeout(() => langInputRef.current?.focus(), 80) }}
+              className="flex items-center gap-1.5 text-xs text-[#888888] hover:text-[#f0f0f0] border border-[#1f1f1f] hover:border-[#333] rounded-lg px-2.5 py-1.5 transition-colors"
+              title="Switch language"
+            >
+              🌐 <span>{language}</span>
+            </button>
+            <AccuracyBadge score={accuracy} size="sm" showLabel={false} />
+          </div>
         </header>
 
         {/* Messages */}
@@ -426,6 +461,60 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
 
       {upgradeModal && (
         <UpgradeModal reason={typeof upgradeModal === 'string' ? upgradeModal : undefined} onClose={() => setUpgradeModal(false)} />
+      )}
+
+      {/* Language picker modal */}
+      {langOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)' }}
+          onClick={(e) => { if (e.target === e.currentTarget) setLangOpen(false) }}
+        >
+          <div className="bg-[#111111] border border-[#1f1f1f] rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <div>
+                <h3 className="text-sm font-medium text-[#f0f0f0]">Mirror language</h3>
+                <p className="text-xs text-[#555] mt-0.5">Mirror will respond in this language</p>
+              </div>
+              <button onClick={() => setLangOpen(false)} className="text-[#555] hover:text-[#888] text-lg leading-none">✕</button>
+            </div>
+            <div className="px-5 pb-3">
+              <input
+                ref={langInputRef}
+                type="text"
+                value={langSearch}
+                onChange={(e) => setLangSearch(e.target.value)}
+                placeholder="Search languages…"
+                className="w-full bg-[#0a0a0a] border border-[#1f1f1f] focus:border-[#a78bfa]/50 rounded-xl px-4 py-2.5 text-sm text-[#f0f0f0] placeholder-[#444] outline-none transition-colors"
+              />
+            </div>
+            <div className="overflow-y-auto max-h-72 px-3 pb-4 space-y-0.5">
+              {LANGUAGES.filter(
+                (l) =>
+                  l.name.toLowerCase().includes(langSearch.toLowerCase()) ||
+                  l.native.toLowerCase().includes(langSearch.toLowerCase())
+              ).map((lang) => {
+                const active = language === lang.name
+                return (
+                  <button
+                    key={lang.code}
+                    onClick={() => {
+                      setLanguage(lang.name)
+                      localStorage.setItem('mirror-language', lang.name)
+                      setLangOpen(false)
+                    }}
+                    className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-colors text-left ${
+                      active ? 'bg-[#a78bfa]/15 text-[#a78bfa]' : 'text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f]'
+                    }`}
+                  >
+                    <span className={active ? 'text-[#a78bfa]' : 'text-[#f0f0f0]'}>{lang.name}</span>
+                    <span className={`text-xs ml-3 shrink-0 ${active ? 'text-[#a78bfa]/70' : 'text-[#444]'}`}>{lang.native}</span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
