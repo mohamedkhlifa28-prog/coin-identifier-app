@@ -64,6 +64,9 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   const langInputRef = useRef<HTMLInputElement>(null)
   const [chatHistory, setChatHistory] = useState<ConvSummary[]>([])
   const [currentConvId, setCurrentConvId] = useState<string | null>(null)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
 
   useEffect(() => {
     const stored = localStorage.getItem('mirror-language')
@@ -126,6 +129,27 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
     setTimeout(() => inputRef.current?.focus(), 100)
   }
 
+  async function deleteConversation(convId: string) {
+    setMenuOpenId(null)
+    await supabase.from('conversations').delete().eq('id', convId)
+    setChatHistory((prev) => prev.filter((c) => c.id !== convId))
+    if (currentConvId === convId) newChat()
+  }
+
+  function startRename(conv: ConvSummary) {
+    setMenuOpenId(null)
+    setRenamingId(conv.id)
+    setRenameValue(conv.title ?? '')
+  }
+
+  async function commitRename(convId: string) {
+    const title = renameValue.trim()
+    if (!title) { setRenamingId(null); return }
+    await supabase.from('conversations').update({ title }).eq('id', convId)
+    setChatHistory((prev) => prev.map((c) => c.id === convId ? { ...c, title } : c))
+    setRenamingId(null)
+  }
+
   const plan = user.plan as Plan
 
   const inactiveDays = user.last_active
@@ -141,6 +165,14 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   useEffect(() => {
     inputRef.current?.focus()
   }, [])
+
+  // Close conversation menu on outside click
+  useEffect(() => {
+    if (!menuOpenId) return
+    function close() { setMenuOpenId(null) }
+    window.addEventListener('click', close)
+    return () => window.removeEventListener('click', close)
+  }, [menuOpenId])
 
   const runBackgroundJobs = useCallback(
     async (userMsg: string, assistantMsg: string) => {
@@ -335,17 +367,62 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
             ) : (
               <div className="space-y-0.5">
                 {chatHistory.map((conv) => (
-                  <button
-                    key={conv.id}
-                    onClick={() => loadConversation(conv.id)}
-                    className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors truncate block ${
-                      currentConvId === conv.id
-                        ? 'bg-[#a78bfa]/10 text-[#a78bfa]'
-                        : 'text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f]'
-                    }`}
-                  >
-                    {conv.title ?? 'New conversation'}
-                  </button>
+                  <div key={conv.id} className="relative group">
+                    {renamingId === conv.id ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onBlur={() => commitRename(conv.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') commitRename(conv.id)
+                          if (e.key === 'Escape') setRenamingId(null)
+                        }}
+                        className="w-full bg-[#1f1f1f] border border-[#a78bfa]/40 rounded-lg px-3 py-2 text-xs text-[#f0f0f0] outline-none"
+                      />
+                    ) : (
+                      <button
+                        onClick={() => { setMenuOpenId(null); loadConversation(conv.id) }}
+                        className={`w-full text-left px-3 py-2 rounded-lg text-xs transition-colors pr-8 truncate block ${
+                          currentConvId === conv.id
+                            ? 'bg-[#a78bfa]/10 text-[#a78bfa]'
+                            : 'text-[#888888] hover:text-[#f0f0f0] hover:bg-[#1f1f1f]'
+                        }`}
+                      >
+                        {conv.title ?? 'New conversation'}
+                      </button>
+                    )}
+
+                    {/* ··· menu button — visible on hover or when menu open */}
+                    {renamingId !== conv.id && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setMenuOpenId(menuOpenId === conv.id ? null : conv.id) }}
+                        className={`absolute right-1 top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[#555] hover:text-[#888] text-xs transition-colors ${
+                          menuOpenId === conv.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                      >
+                        ···
+                      </button>
+                    )}
+
+                    {/* Dropdown */}
+                    {menuOpenId === conv.id && (
+                      <div className="absolute right-0 top-full mt-0.5 z-50 bg-[#1a1a1a] border border-[#2a2a2a] rounded-xl overflow-hidden shadow-xl w-36">
+                        <button
+                          onClick={() => startRename(conv)}
+                          className="w-full text-left px-4 py-2.5 text-xs text-[#888888] hover:text-[#f0f0f0] hover:bg-[#222] transition-colors"
+                        >
+                          ✎ Rename
+                        </button>
+                        <button
+                          onClick={() => deleteConversation(conv.id)}
+                          className="w-full text-left px-4 py-2.5 text-xs text-[#f87171] hover:bg-[#f87171]/10 transition-colors"
+                        >
+                          ✕ Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 ))}
               </div>
             )}
