@@ -69,6 +69,8 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   const [renameValue, setRenameValue] = useState('')
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<any>(null)
+  const voiceTranscriptRef = useRef('')
+  const sentViaVoiceRef = useRef(false)
   const [playingMsgId, setPlayingMsgId] = useState<string | null>(null)
   const [autoSpeak, setAutoSpeak] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -217,21 +219,31 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
     rec.continuous = false
     rec.interimResults = true
     rec.lang = langCode
-    rec.onstart = () => setListening(true)
+    rec.onstart = () => { setListening(true); voiceTranscriptRef.current = '' }
     rec.onresult = (e: any) => {
       let transcript = ''
       for (let i = 0; i < e.results.length; i++) {
         transcript += e.results[i][0].transcript
       }
+      voiceTranscriptRef.current = transcript
       setInput(transcript)
       if (inputRef.current) {
         inputRef.current.style.height = 'auto'
         inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 160)}px`
       }
     }
-    rec.onend = () => setListening(false)
+    rec.onend = () => {
+      setListening(false)
+      const transcript = voiceTranscriptRef.current.trim()
+      voiceTranscriptRef.current = ''
+      if (transcript) {
+        sentViaVoiceRef.current = true
+        sendMessage(transcript)
+      }
+    }
     rec.onerror = (e: any) => {
       setListening(false)
+      voiceTranscriptRef.current = ''
       if (e.error !== 'aborted') setError(`Mic error: ${e.error}`)
     }
     recognitionRef.current = rec
@@ -301,8 +313,8 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
     [messages, user.id, accuracy]
   )
 
-  async function sendMessage() {
-    const text = input.trim()
+  async function sendMessage(overrideText?: string) {
+    const text = (overrideText !== undefined ? overrideText : input).trim()
     if (!text || streaming) return
     setInput('')
     setError(null)
@@ -365,8 +377,11 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
       setMessages((prev) => [...prev, assistantMessage])
       setStreamingContent('')
 
-      // Auto-speak the response if enabled
-      if (autoSpeak) speakMessage(assistantMessage.id, fullContent)
+      // Auto-speak: always when sent via voice, or when toggle is on
+      if (autoSpeak || sentViaVoiceRef.current) {
+        sentViaVoiceRef.current = false
+        speakMessage(assistantMessage.id, fullContent)
+      }
 
       // Background jobs (non-blocking)
       runBackgroundJobs(text, fullContent)
