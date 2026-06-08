@@ -359,7 +359,7 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let fullContent = ''
-      const willSpeak = autoSpeak || sentViaVoiceRef.current
+      const willSpeak = sentViaVoiceRef.current
       const langCode = LANGUAGES.find((l) => l.name === language)?.code ?? 'en'
 
       // Reset streaming TTS state
@@ -690,33 +690,6 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
               title="Switch language"
             >
               🌐 <span>{language}</span>
-            </button>
-            {/* Auto-speak toggle */}
-            <button
-              onClick={() => {
-                const next = !autoSpeak
-                setAutoSpeak(next)
-                localStorage.setItem('mirror-autospeak', String(next))
-                if (!next) stopSpeech()
-              }}
-              title={autoSpeak ? 'Auto-speak on — click to disable' : 'Auto-speak off — click to enable'}
-              className={`flex items-center gap-1 text-xs border rounded-lg px-2.5 py-1.5 transition-colors ${
-                autoSpeak
-                  ? 'text-[#a78bfa] border-[#a78bfa]/40 bg-[#a78bfa]/10'
-                  : 'text-[#888888] border-[#1f1f1f] hover:text-[#f0f0f0] hover:border-[#333]'
-              }`}
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                {autoSpeak ? (
-                  <>
-                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-                  </>
-                ) : (
-                  <line x1="23" y1="9" x2="17" y2="15"/>
-                )}
-              </svg>
             </button>
             <AccuracyBadge score={accuracy} size="sm" showLabel={false} />
           </div>
