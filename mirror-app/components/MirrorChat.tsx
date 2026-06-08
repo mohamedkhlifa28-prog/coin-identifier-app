@@ -69,10 +69,14 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   const [renameValue, setRenameValue] = useState('')
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<any>(null)
+  const [playingMsgId, setPlayingMsgId] = useState<string | null>(null)
+  const [autoSpeak, setAutoSpeak] = useState(false)
+  const audioRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mirror-language')
     if (stored) setLanguage(stored)
+    if (localStorage.getItem('mirror-autospeak') === 'true') setAutoSpeak(true)
   }, [])
 
   // Load conversation history on mount
@@ -150,6 +154,51 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
     await supabase.from('conversations').update({ title }).eq('id', convId)
     setChatHistory((prev) => prev.map((c) => c.id === convId ? { ...c, title } : c))
     setRenamingId(null)
+  }
+
+  function stopSpeech() {
+    audioRef.current?.pause()
+    audioRef.current = null
+    if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+    setPlayingMsgId(null)
+  }
+
+  async function speakMessage(msgId: string, text: string) {
+    if (playingMsgId === msgId) { stopSpeech(); return }
+    stopSpeech()
+    setPlayingMsgId(msgId)
+
+    // Try ElevenLabs first (Platinum + voice clone)
+    try {
+      const res = await fetch('/api/voice/speak', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      })
+      if (res.ok) {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const audio = new Audio(url)
+        audioRef.current = audio
+        audio.onended = () => { setPlayingMsgId(null); URL.revokeObjectURL(url) }
+        audio.onerror = () => { setPlayingMsgId(null); URL.revokeObjectURL(url) }
+        audio.play()
+        return
+      }
+    } catch { /* fall through to browser TTS */ }
+
+    // Browser speech synthesis fallback
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      const langCode = LANGUAGES.find((l) => l.name === language)?.code ?? 'en'
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.lang = langCode
+      utterance.rate = 0.95
+      utterance.onend = () => setPlayingMsgId(null)
+      utterance.onerror = () => setPlayingMsgId(null)
+      window.speechSynthesis.speak(utterance)
+    } else {
+      setPlayingMsgId(null)
+    }
   }
 
   function toggleVoice() {
@@ -315,6 +364,9 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
       }
       setMessages((prev) => [...prev, assistantMessage])
       setStreamingContent('')
+
+      // Auto-speak the response if enabled
+      if (autoSpeak) speakMessage(assistantMessage.id, fullContent)
 
       // Background jobs (non-blocking)
       runBackgroundJobs(text, fullContent)
@@ -565,6 +617,33 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
             >
               🌐 <span>{language}</span>
             </button>
+            {/* Auto-speak toggle */}
+            <button
+              onClick={() => {
+                const next = !autoSpeak
+                setAutoSpeak(next)
+                localStorage.setItem('mirror-autospeak', String(next))
+                if (!next) stopSpeech()
+              }}
+              title={autoSpeak ? 'Auto-speak on — click to disable' : 'Auto-speak off — click to enable'}
+              className={`flex items-center gap-1 text-xs border rounded-lg px-2.5 py-1.5 transition-colors ${
+                autoSpeak
+                  ? 'text-[#a78bfa] border-[#a78bfa]/40 bg-[#a78bfa]/10'
+                  : 'text-[#888888] border-[#1f1f1f] hover:text-[#f0f0f0] hover:border-[#333]'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                {autoSpeak ? (
+                  <>
+                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                  </>
+                ) : (
+                  <line x1="23" y1="9" x2="17" y2="15"/>
+                )}
+              </svg>
+            </button>
             <AccuracyBadge score={accuracy} size="sm" showLabel={false} />
           </div>
         </header>
@@ -601,7 +680,13 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
           )}
 
           {messages.map((msg) => (
-            <MessageBubble key={msg.id} message={msg} userName={user.name ?? 'You'} />
+            <MessageBubble
+              key={msg.id}
+              message={msg}
+              userName={user.name ?? 'You'}
+              onSpeak={msg.role === 'assistant' ? () => speakMessage(msg.id, msg.content) : undefined}
+              isPlaying={playingMsgId === msg.id}
+            />
           ))}
 
           {streaming && (
@@ -751,15 +836,19 @@ function MessageBubble({
   message,
   userName,
   isStreaming = false,
+  onSpeak,
+  isPlaying = false,
 }: {
   message: ChatMessage
   userName: string
   isStreaming?: boolean
+  onSpeak?: () => void
+  isPlaying?: boolean
 }) {
   const isUser = message.role === 'user'
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} message-bubble`}>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} message-bubble group`}>
       <div className={`max-w-[75%] ${isUser ? 'order-1' : 'order-2'}`}>
         <p className={`text-[10px] uppercase tracking-widest mb-1.5 ${isUser ? 'text-right text-[#555]' : 'text-[#a78bfa]/70'}`}>
           {isUser ? 'You' : `Mirror (${userName})`}
@@ -776,6 +865,35 @@ function MessageBubble({
             <span className="inline-block w-0.5 h-4 bg-[#a78bfa] animate-pulse-accent ml-0.5 align-middle" />
           )}
         </div>
+        {/* Speak button — assistant messages only, not while streaming */}
+        {!isUser && !isStreaming && onSpeak && (
+          <button
+            onClick={onSpeak}
+            className={`mt-1.5 flex items-center gap-1.5 text-[10px] transition-all opacity-0 group-hover:opacity-100 ${
+              isPlaying ? 'text-[#a78bfa] opacity-100' : 'text-[#444] hover:text-[#888]'
+            }`}
+          >
+            {isPlaying ? (
+              <>
+                <span className="flex gap-0.5 items-end h-3">
+                  {[1,2,3].map(i => (
+                    <span key={i} className="w-0.5 bg-[#a78bfa] rounded-full animate-pulse" style={{ height: `${6 + i * 3}px`, animationDelay: `${i * 0.15}s` }} />
+                  ))}
+                </span>
+                Stop
+              </>
+            ) : (
+              <>
+                <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                </svg>
+                Speak
+              </>
+            )}
+          </button>
+        )}
       </div>
     </div>
   )
