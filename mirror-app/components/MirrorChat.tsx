@@ -67,6 +67,8 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [listening, setListening] = useState(false)
+  const recognitionRef = useRef<any>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('mirror-language')
@@ -148,6 +150,43 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
     await supabase.from('conversations').update({ title }).eq('id', convId)
     setChatHistory((prev) => prev.map((c) => c.id === convId ? { ...c, title } : c))
     setRenamingId(null)
+  }
+
+  function toggleVoice() {
+    if (listening) {
+      recognitionRef.current?.stop()
+      setListening(false)
+      return
+    }
+    const SR = (window as any).SpeechRecognition ?? (window as any).webkitSpeechRecognition
+    if (!SR) {
+      setError('Voice input is not supported in this browser. Try Chrome or Edge.')
+      return
+    }
+    const langCode = LANGUAGES.find((l) => l.name === language)?.code ?? 'en'
+    const rec = new SR()
+    rec.continuous = false
+    rec.interimResults = true
+    rec.lang = langCode
+    rec.onstart = () => setListening(true)
+    rec.onresult = (e: any) => {
+      let transcript = ''
+      for (let i = 0; i < e.results.length; i++) {
+        transcript += e.results[i][0].transcript
+      }
+      setInput(transcript)
+      if (inputRef.current) {
+        inputRef.current.style.height = 'auto'
+        inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 160)}px`
+      }
+    }
+    rec.onend = () => setListening(false)
+    rec.onerror = (e: any) => {
+      setListening(false)
+      if (e.error !== 'aborted') setError(`Mic error: ${e.error}`)
+    }
+    recognitionRef.current = rec
+    rec.start()
   }
 
   const plan = user.plan as Plan
@@ -601,12 +640,32 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
               value={input}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Say something…"
+              placeholder={listening ? 'Listening…' : 'Say something…'}
               rows={1}
               disabled={streaming}
-              className="flex-1 bg-[#111111] border border-[#1f1f1f] focus:border-[#a78bfa]/50 rounded-2xl px-4 py-3 text-[#f0f0f0] placeholder-[#444] text-sm resize-none outline-none transition-colors disabled:opacity-50 leading-relaxed"
+              className={`flex-1 bg-[#111111] border rounded-2xl px-4 py-3 text-[#f0f0f0] placeholder-[#444] text-sm resize-none outline-none transition-colors disabled:opacity-50 leading-relaxed ${
+                listening ? 'border-[#f87171]/50 placeholder-[#f87171]/50' : 'border-[#1f1f1f] focus:border-[#a78bfa]/50'
+              }`}
               style={{ minHeight: '48px', maxHeight: '160px' }}
             />
+            {/* Mic button */}
+            <button
+              type="button"
+              onClick={toggleVoice}
+              disabled={streaming}
+              title={listening ? 'Stop listening' : 'Voice input'}
+              className={`shrink-0 w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
+                listening
+                  ? 'bg-[#f87171]/20 text-[#f87171] animate-pulse'
+                  : 'bg-[#1f1f1f] text-[#888] hover:text-[#f0f0f0] hover:bg-[#2a2a2a] disabled:opacity-30'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" x2="12" y1="19" y2="22"/>
+              </svg>
+            </button>
             <button
               type="submit"
               disabled={streaming || !input.trim()}
