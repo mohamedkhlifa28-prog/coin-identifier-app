@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { authAPI, userAPI } from '../api/client'
+import { initPurchases } from '../services/purchases'
 
 export const AuthContext = createContext(null)
 
@@ -17,8 +18,10 @@ export function AuthProvider({ children }) {
     if (savedToken) {
       userAPI.getProfile()
         .then((res) => {
-          setUser(res.data.user || res.data)
+          const userData = res.data.user || res.data
+          setUser(userData)
           setToken(savedToken)
+          initPurchases(userData.id).catch(() => {})
         })
         .catch(() => {
           localStorage.removeItem('coinvault_token')
@@ -37,6 +40,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('coinvault_token', newToken)
     setToken(newToken)
     setUser(userData)
+    initPurchases(userData.id).catch(() => {})
     return userData
   }, [])
 
@@ -46,6 +50,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('coinvault_token', newToken)
     setToken(newToken)
     setUser(userData)
+    initPurchases(userData.id).catch(() => {})
     return userData
   }, [])
 

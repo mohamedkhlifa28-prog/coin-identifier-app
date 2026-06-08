@@ -191,4 +191,28 @@ router.get('/badges', authMiddleware, (req, res) => {
   return res.json({ earned, available });
 });
 
+// DELETE /api/user/account
+router.delete('/account', authMiddleware, (req, res) => {
+  const userId = req.user.id;
+  const deleteAll = db.transaction(() => {
+    db.prepare('DELETE FROM user_badges WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM notifications WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM messages WHERE sender_id = ? OR receiver_id = ?').run(userId, userId);
+    db.prepare('DELETE FROM crh_sessions WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM user_coins WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM scans WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM listings WHERE seller_id = ?').run(userId);
+    db.prepare('DELETE FROM posts WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM likes WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM comments WHERE user_id = ?').run(userId);
+    db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  });
+  try {
+    deleteAll();
+    return res.json({ message: 'Account deleted successfully' });
+  } catch (err) {
+    return res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
 module.exports = router;

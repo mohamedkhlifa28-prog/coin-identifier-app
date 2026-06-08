@@ -6,6 +6,10 @@ import AppShell from './components/Layout/AppShell'
 import Login from './pages/Auth/Login'
 import Register from './pages/Auth/Register'
 
+// Legal pages (public)
+import PrivacyPolicy from './pages/Legal/PrivacyPolicy'
+import TermsOfService from './pages/Legal/TermsOfService'
+
 // Protected pages
 import ScanScreen from './pages/Scan/ScanScreen'
 import ResultSheet from './pages/Scan/ResultSheet'
@@ -63,6 +67,10 @@ export default function App() {
       {/* Auth routes */}
       <Route path="/auth/login" element={<Login />} />
       <Route path="/auth/register" element={<Register />} />
+
+      {/* Public legal routes */}
+      <Route path="/privacy" element={<PrivacyPolicy />} />
+      <Route path="/terms" element={<TermsOfService />} />
 
       {/* Protected routes wrapped in AppShell */}
       <Route
