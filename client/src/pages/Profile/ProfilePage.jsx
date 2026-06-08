@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
-import { LogOut, Crown, Bell, X, Flame, MessageCircle, CircleDollarSign } from 'lucide-react'
+import { LogOut, Crown, Bell, X, Flame, MessageCircle, CircleDollarSign, Shield, FileText, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import apiClient, { userAPI, subscribeAPI, leaderboardAPI } from '../../api/client'
 import { useAuth } from '../../hooks/useAuth'
 import { formatCurrency, getInitials, calculateProgress } from '../../utils/helpers'
+import { isNative, purchaseTier, restorePurchases } from '../../services/purchases'
 
 const BADGE_ICONS = {
   'First Step': '👣',
@@ -101,6 +102,9 @@ export default function ProfilePage() {
   const [isUpgrading, setIsUpgrading] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [notifications, setNotifications] = useState([])
   const [showNotifications, setShowNotifications] = useState(false)
   const [unreadNotifs, setUnreadNotifs] = useState(0)
@@ -145,21 +149,59 @@ export default function ProfilePage() {
   const handleUpgrade = async (tier) => {
     setIsUpgrading(true)
     try {
-      const res = await subscribeAPI.subscribe(tier, {
-        successUrl: `${window.location.origin}/profile?subscribed=true`,
-        cancelUrl: `${window.location.origin}/profile`,
-      })
-      if (res.data.url) {
-        window.location.href = res.data.url
-      } else if (res.data.success) {
-        updateUser({ subscription_tier: tier })
-        setSubStatus({ tier })
-        alert('Subscription activated!')
+      if (isNative()) {
+        const customerInfo = await purchaseTier(tier)
+        const active = customerInfo?.entitlements?.active || {}
+        const activeTier = 'expert' in active ? 'expert' : 'pro' in active ? 'pro' : tier
+        updateUser({ subscription_tier: activeTier })
+        setSubStatus({ tier: activeTier })
+      } else {
+        const res = await subscribeAPI.subscribe(tier, {
+          successUrl: `${window.location.origin}/profile?subscribed=true`,
+          cancelUrl: `${window.location.origin}/profile`,
+        })
+        if (res.data.url) {
+          window.location.href = res.data.url
+        } else if (res.data.success) {
+          updateUser({ subscription_tier: tier })
+          setSubStatus({ tier })
+        }
       }
     } catch (err) {
-      alert(err?.response?.data?.error || 'Failed to start subscription')
+      if (err?.code !== 'PURCHASE_CANCELLED') {
+        alert(err?.message || err?.response?.data?.error || 'Failed to start subscription')
+      }
     } finally {
       setIsUpgrading(false)
+    }
+  }
+
+  const handleRestorePurchases = async () => {
+    setIsRestoring(true)
+    try {
+      const customerInfo = await restorePurchases()
+      if (customerInfo) {
+        const active = customerInfo?.entitlements?.active || {}
+        const activeTier = 'expert' in active ? 'expert' : 'pro' in active ? 'pro' : 'free'
+        updateUser({ subscription_tier: activeTier })
+        setSubStatus({ tier: activeTier })
+        alert(activeTier !== 'free' ? `${activeTier.charAt(0).toUpperCase() + activeTier.slice(1)} subscription restored!` : 'No active subscriptions found.')
+      }
+    } catch {
+      alert('Failed to restore purchases')
+    } finally {
+      setIsRestoring(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    setIsDeleting(true)
+    try {
+      await apiClient.delete('/user/account')
+      logout()
+    } catch {
+      alert('Failed to delete account. Please try again.')
+      setIsDeleting(false)
     }
   }
 
@@ -271,6 +313,7 @@ export default function ProfilePage() {
           { key: 'profile', label: 'Badges' },
           { key: 'subscription', label: 'Plan' },
           { key: 'leaderboard', label: 'Leaderboard' },
+          { key: 'settings', label: 'Settings' },
         ].map((tab) => (
           <button
             key={tab.key}
@@ -389,11 +432,79 @@ export default function ProfilePage() {
                 </button>
               </div>
             )}
+
+            {/* Restore Purchases (native only) */}
+            {isNative() && (
+              <button
+                onClick={handleRestorePurchases}
+                disabled={isRestoring}
+                className="w-full text-center text-[#D4A017] text-sm font-body py-2 disabled:opacity-60"
+              >
+                {isRestoring ? 'Restoring...' : 'Restore Purchases'}
+              </button>
+            )}
           </div>
         )}
 
         {/* Leaderboard tab */}
         {activeTab === 'leaderboard' && <LeaderboardTab currentUserId={user?.id} />}
+
+        {/* Settings tab */}
+        {activeTab === 'settings' && (
+          <div className="space-y-3">
+            <button
+              onClick={() => navigate('/privacy')}
+              className="w-full flex items-center gap-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl px-4 py-3 active:opacity-80"
+            >
+              <Shield size={16} className="text-[#D4A017]" />
+              <span className="text-white text-sm font-body font-medium flex-1 text-left">Privacy Policy</span>
+              <span className="text-gray-600 text-sm">→</span>
+            </button>
+
+            <button
+              onClick={() => navigate('/terms')}
+              className="w-full flex items-center gap-3 bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl px-4 py-3 active:opacity-80"
+            >
+              <FileText size={16} className="text-[#D4A017]" />
+              <span className="text-white text-sm font-body font-medium flex-1 text-left">Terms of Service</span>
+              <span className="text-gray-600 text-sm">→</span>
+            </button>
+
+            <div className="pt-4">
+              {!showDeleteConfirm ? (
+                <button
+                  onClick={() => setShowDeleteConfirm(true)}
+                  className="w-full flex items-center gap-3 bg-red-950/30 border border-red-800/40 rounded-xl px-4 py-3 active:opacity-80"
+                >
+                  <Trash2 size={16} className="text-red-400" />
+                  <span className="text-red-400 text-sm font-body font-medium">Delete Account</span>
+                </button>
+              ) : (
+                <div className="bg-red-950/30 border border-red-800/50 rounded-2xl p-4">
+                  <p className="text-white font-body font-semibold text-sm mb-1">Delete your account?</p>
+                  <p className="text-gray-400 text-xs font-body mb-4 leading-relaxed">
+                    This will permanently delete your account, collection, scan history, and all data. This action cannot be undone.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowDeleteConfirm(false)}
+                      className="flex-1 py-2.5 rounded-xl bg-[#2A2A2A] text-white text-sm font-body"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={isDeleting}
+                      className="flex-1 py-2.5 rounded-xl bg-red-700 text-white text-sm font-bold font-body disabled:opacity-60"
+                    >
+                      {isDeleting ? 'Deleting...' : 'Delete Forever'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Notifications sheet */}
