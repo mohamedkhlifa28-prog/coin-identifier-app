@@ -71,6 +71,7 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
   const recognitionRef = useRef<any>(null)
   const voiceTranscriptRef = useRef('')
   const sentViaVoiceRef = useRef(false)
+  const streamTTSPosRef = useRef(0)
   const [playingMsgId, setPlayingMsgId] = useState<string | null>(null)
   const [autoSpeak, setAutoSpeak] = useState(false)
   const audioRef = useRef<HTMLAudioElement | null>(null)
@@ -358,6 +359,14 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
       const reader = res.body!.getReader()
       const decoder = new TextDecoder()
       let fullContent = ''
+      const willSpeak = autoSpeak || sentViaVoiceRef.current
+      const langCode = LANGUAGES.find((l) => l.name === language)?.code ?? 'en'
+
+      // Reset streaming TTS state
+      if (willSpeak) {
+        streamTTSPosRef.current = 0
+        if (typeof window !== 'undefined') window.speechSynthesis?.cancel()
+      }
 
       while (true) {
         const { done, value } = await reader.read()
@@ -365,6 +374,21 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
         const chunk = decoder.decode(value, { stream: true })
         fullContent += chunk
         setStreamingContent(fullContent)
+
+        // Speak each complete sentence as it arrives — no waiting for full response
+        if (willSpeak && typeof window !== 'undefined' && window.speechSynthesis) {
+          let unspoken = fullContent.slice(streamTTSPosRef.current)
+          let m: RegExpMatchArray | null
+          while ((m = unspoken.match(/^([\s\S]*?[.!?])(\s|$)/)) && m[1].trim().length > 5) {
+            const utt = new SpeechSynthesisUtterance(m[1].trim())
+            utt.lang = langCode
+            utt.rate = 1.1
+            utt.onend = () => { if (!window.speechSynthesis.pending) setPlayingMsgId(null) }
+            window.speechSynthesis.speak(utt)
+            streamTTSPosRef.current += m[0].length
+            unspoken = unspoken.slice(m[0].length)
+          }
+        }
       }
 
       // Commit streamed message to messages array
@@ -377,10 +401,45 @@ export function MirrorChat({ user, voiceProfile }: MirrorChatProps) {
       setMessages((prev) => [...prev, assistantMessage])
       setStreamingContent('')
 
-      // Auto-speak: always when sent via voice, or when toggle is on
-      if (autoSpeak || sentViaVoiceRef.current) {
+      if (willSpeak) {
         sentViaVoiceRef.current = false
-        speakMessage(assistantMessage.id, fullContent)
+
+        // Platinum: cancel browser TTS and use ElevenLabs voice clone for full response
+        if (plan === 'platinum') {
+          try {
+            const elRes = await fetch('/api/voice/speak', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: fullContent }),
+            })
+            if (elRes.ok) {
+              if (typeof window !== 'undefined') window.speechSynthesis.cancel()
+              const blob = await elRes.blob()
+              const url = URL.createObjectURL(blob)
+              const audio = new Audio(url)
+              audioRef.current = audio
+              setPlayingMsgId(assistantMessage.id)
+              audio.onended = () => { setPlayingMsgId(null); URL.revokeObjectURL(url) }
+              audio.onerror = () => { setPlayingMsgId(null); URL.revokeObjectURL(url) }
+              audio.play()
+              streamTTSPosRef.current = 0
+              runBackgroundJobs(text, fullContent)
+              return
+            }
+          } catch { /* fall through to browser TTS */ }
+        }
+
+        // Speak any remaining text after the last sentence boundary
+        const remaining = fullContent.slice(streamTTSPosRef.current).trim()
+        if (remaining && typeof window !== 'undefined' && window.speechSynthesis) {
+          const utt = new SpeechSynthesisUtterance(remaining)
+          utt.lang = langCode
+          utt.rate = 1.1
+          utt.onend = () => { if (!window.speechSynthesis.pending) setPlayingMsgId(null) }
+          window.speechSynthesis.speak(utt)
+        }
+        streamTTSPosRef.current = 0
+        setPlayingMsgId(assistantMessage.id)
       }
 
       // Background jobs (non-blocking)
