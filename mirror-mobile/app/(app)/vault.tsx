@@ -14,11 +14,11 @@ import { Colors } from '../../src/lib/constants';
 
 type Memory = {
   id: string;
-  content: string;
+  quote: string;
   context: string | null;
   tags: string[] | null;
   created_at: string;
-  emotional_weight: number | null;
+  weight: number | null;
 };
 
 function formatDate(iso: string): string {
@@ -35,16 +35,16 @@ function MemoryCard({ memory }: { memory: Memory }) {
     <View style={styles.card}>
       <View style={styles.cardHeader}>
         <Text style={styles.cardDate}>{formatDate(memory.created_at)}</Text>
-        {memory.emotional_weight !== null && (
+        {memory.weight !== null && (
           <View style={styles.weightBadge}>
             <Text style={styles.weightText}>
-              {'◆'.repeat(Math.min(Math.round(memory.emotional_weight / 2), 5))}
+              {'◆'.repeat(Math.min(Math.round((memory.weight ?? 0) / 2), 5))}
             </Text>
           </View>
         )}
       </View>
 
-      <Text style={styles.cardContent}>"{memory.content}"</Text>
+      <Text style={styles.cardContent}>"{memory.quote}"</Text>
 
       {memory.context ? (
         <Text style={styles.cardContext}>{memory.context}</Text>
@@ -83,7 +83,7 @@ export default function VaultScreen() {
 
       const { data, error: fetchError } = await supabase
         .from('memories')
-        .select('id, content, context, tags, created_at, emotional_weight')
+        .select('id, quote, context, tags, created_at, weight')
         .eq('user_id', sessionData.session.user.id)
         .order('created_at', { ascending: false })
         .limit(100);

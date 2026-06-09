@@ -14,11 +14,15 @@ import { supabase } from '../../src/lib/supabase';
 import { Colors } from '../../src/lib/constants';
 import type { User } from '@supabase/supabase-js';
 
-type UserProfile = {
-  full_name: string | null;
-  accuracy_score: number | null;
-  voice_profile: Record<string, unknown> | null;
+type UserRecord = {
+  name: string | null;
+  plan: string | null;
   created_at: string | null;
+};
+
+type VoiceProfileRecord = {
+  accuracy_score: number | null;
+  profile_json: Record<string, unknown> | null;
 };
 
 function SettingsRow({
@@ -65,7 +69,8 @@ function SectionHeader({ title }: { title: string }) {
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [userRecord, setUserRecord] = useState<UserRecord | null>(null);
+  const [voiceProfile, setVoiceProfile] = useState<VoiceProfileRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -77,13 +82,12 @@ export default function SettingsScreen() {
       setUser(currentUser);
 
       if (currentUser) {
-        const { data: profileData } = await supabase
-          .from('user_profiles')
-          .select('full_name, accuracy_score, voice_profile, created_at')
-          .eq('user_id', currentUser.id)
-          .maybeSingle();
-
-        setProfile(profileData ?? null);
+        const [userResult, vpResult] = await Promise.all([
+          supabase.from('users').select('name, plan, created_at').eq('id', currentUser.id).maybeSingle(),
+          supabase.from('voice_profiles').select('accuracy_score, profile_json').eq('user_id', currentUser.id).maybeSingle(),
+        ]);
+        setUserRecord(userResult.data ?? null);
+        setVoiceProfile(vpResult.data ?? null);
       }
     } finally {
       setLoading(false);
@@ -125,7 +129,7 @@ export default function SettingsScreen() {
   }
 
   function getDisplayName(): string {
-    if (profile?.full_name) return profile.full_name;
+    if (userRecord?.name) return userRecord.name;
     if (user?.user_metadata?.full_name) return user.user_metadata.full_name as string;
     if (user?.user_metadata?.display_name) return user.user_metadata.display_name as string;
     return 'Anonymous';
@@ -133,7 +137,7 @@ export default function SettingsScreen() {
 
   function formatAccuracyScore(score: number | null): string {
     if (score === null || score === undefined) return 'Not yet rated';
-    return `${Math.round(score * 10) / 10} / 10`;
+    return `${score} / 100`;
   }
 
   function formatJoinDate(dateStr: string | null): string {
@@ -182,7 +186,7 @@ export default function SettingsScreen() {
         <View style={styles.divider} />
         <SettingsRow
           label="Member Since"
-          value={formatJoinDate(profile?.created_at ?? null)}
+          value={formatJoinDate(userRecord?.created_at ?? null)}
         />
       </View>
 
@@ -191,12 +195,12 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <SettingsRow
           label="Accuracy Score"
-          value={formatAccuracyScore(profile?.accuracy_score ?? null)}
+          value={formatAccuracyScore(voiceProfile?.accuracy_score ?? null)}
         />
         <View style={styles.divider} />
         <SettingsRow
           label="Profile Status"
-          value={profile?.voice_profile ? 'Built ✓' : 'Not built'}
+          value={voiceProfile?.profile_json && Object.keys(voiceProfile.profile_json).length > 0 ? 'Built ✓' : 'Not built'}
         />
       </View>
 

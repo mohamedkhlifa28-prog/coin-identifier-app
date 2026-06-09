@@ -41,75 +41,21 @@ export async function streamChat(
   const response = await fetch(`${API_BASE}/api/chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({
-      message,
-      history,
-      sessionId,
-      language,
-    }),
+    body: JSON.stringify({ message, history, sessionId, language }),
   });
 
   if (!response.ok) {
     throw new Error(`Chat API error: ${response.status}`);
   }
 
-  const reader = response.body?.getReader();
-  if (!reader) {
-    throw new Error('No response body reader available');
-  }
-
-  const decoder = new TextDecoder();
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split('\n');
-
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6).trim();
-        if (data === '[DONE]') continue;
-        try {
-          const parsed = JSON.parse(data);
-          const text =
-            parsed.choices?.[0]?.delta?.content ||
-            parsed.content ||
-            parsed.text ||
-            '';
-          if (text) {
-            onChunk(text);
-          }
-        } catch {
-          // If not JSON, treat as raw text chunk
-          if (data && data !== '[DONE]') {
-            onChunk(data);
-          }
-        }
-      } else if (line.trim() && !line.startsWith(':')) {
-        // Handle non-SSE streaming responses
-        try {
-          const parsed = JSON.parse(line);
-          const text =
-            parsed.choices?.[0]?.delta?.content ||
-            parsed.content ||
-            parsed.text ||
-            '';
-          if (text) {
-            onChunk(text);
-          }
-        } catch {
-          // Not JSON, skip
-        }
-      }
-    }
-  }
+  const text = await response.text();
+  if (text) onChunk(text);
 }
 
 export async function transcribeAudio(audioUri: string): Promise<string> {
   const headers = await getAuthHeaders();
-  const { Authorization } = headers;
+  const fetchHeaders: Record<string, string> = {};
+  if (headers.Authorization) fetchHeaders['Authorization'] = headers.Authorization;
 
   const formData = new FormData();
   formData.append('audio', {
@@ -120,9 +66,7 @@ export async function transcribeAudio(audioUri: string): Promise<string> {
 
   const response = await fetch(`${API_BASE}/api/voice/transcribe`, {
     method: 'POST',
-    headers: {
-      Authorization,
-    },
+    headers: fetchHeaders,
     body: formData,
   });
 

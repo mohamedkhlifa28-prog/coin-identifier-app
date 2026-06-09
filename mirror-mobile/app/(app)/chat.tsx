@@ -10,14 +10,24 @@ import {
   Platform,
   ActivityIndicator,
   Alert,
+  Modal,
+  SafeAreaView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Audio } from 'expo-av';
 import * as Speech from 'expo-speech';
 import { useNavigation } from 'expo-router';
+import { supabase } from '../../src/lib/supabase';
 import { streamChat, transcribeAudio } from '../../src/lib/api';
 import { Colors } from '../../src/lib/constants';
 import MessageBubble, { ChatMessage } from '../../src/components/MessageBubble';
+
+type ConvSummary = {
+  id: string;
+  title: string | null;
+  session_date: string;
+  messages_json: { role: 'user' | 'assistant'; content: string }[];
+};
 
 let messageIdCounter = 0;
 function newId() {
@@ -37,12 +47,28 @@ export default function ChatScreen() {
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   const [language] = useState('en');
 
+  const [convId, setConvId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [conversations, setConversations] = useState<ConvSummary[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   const recordingRef = useRef<Audio.Recording | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const streamingMessageIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={openHistory}
+          style={{ paddingHorizontal: 16, paddingVertical: 8 }}
+          activeOpacity={0.7}
+        >
+          <Text style={{ color: Colors.accent, fontSize: 15, fontWeight: '500' }}>
+            History
+          </Text>
+        </TouchableOpacity>
+      ),
       headerRight: () => (
         <TouchableOpacity
           onPress={handleNewChat}
@@ -63,6 +89,11 @@ export default function ChatScreen() {
     });
   }, [navigation]);
 
+  function openHistory() {
+    setShowHistory(true);
+    loadHistory();
+  }
+
   function handleNewChat() {
     Alert.alert('New Chat', 'Start a new conversation? This will clear the current chat.', [
       { text: 'Cancel', style: 'cancel' },
@@ -73,9 +104,72 @@ export default function ChatScreen() {
           setMessages([]);
           setInputText('');
           setIsLoading(false);
+          setConvId(null);
         },
       },
     ]);
+  }
+
+  const loadHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      const { data } = await supabase
+        .from('conversations')
+        .select('id, title, session_date, messages_json')
+        .eq('user_id', session.user.id)
+        .order('session_date', { ascending: false })
+        .limit(30);
+      setConversations((data as ConvSummary[]) || []);
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  async function saveConversation(msgs: ChatMessage[]) {
+    if (msgs.length === 0) return;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const messagesForDb = msgs.map((m) => ({ role: m.role, content: m.content }));
+      const firstUserMsg = msgs.find((m) => m.role === 'user');
+      const title = firstUserMsg?.content?.slice(0, 50) || 'Chat';
+
+      if (convId) {
+        await supabase
+          .from('conversations')
+          .update({ messages_json: messagesForDb, title })
+          .eq('id', convId);
+      } else {
+        const { data } = await supabase
+          .from('conversations')
+          .insert({
+            user_id: session.user.id,
+            messages_json: messagesForDb,
+            title,
+            session_date: new Date().toISOString(),
+          })
+          .select('id')
+          .single();
+        if (data) setConvId(data.id);
+      }
+    } catch {
+      // Non-critical — don't crash the UI if save fails
+    }
+  }
+
+  function loadConversation(conv: ConvSummary) {
+    const msgs: ChatMessage[] = conv.messages_json.map((m) => ({
+      id: newId(),
+      role: m.role,
+      content: m.content,
+      timestamp: new Date(conv.session_date),
+    }));
+    setMessages(msgs);
+    setConvId(conv.id);
+    setShowHistory(false);
   }
 
   const scrollToBottom = useCallback(() => {
@@ -104,6 +198,7 @@ export default function ChatScreen() {
     };
 
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
+    const snapshotMessages = [...messages];
 
     setMessages((prev) => [...prev, userMessage]);
 
@@ -133,6 +228,14 @@ export default function ChatScreen() {
 
       setIsLoading(false);
       streamingMessageIdRef.current = null;
+
+      // Save conversation to Supabase (fire-and-forget)
+      const finalMsgs: ChatMessage[] = [
+        ...snapshotMessages,
+        userMessage,
+        { id: assistantId, role: 'assistant' as const, content: fullResponse, timestamp: new Date() },
+      ];
+      saveConversation(finalMsgs);
 
       if (autoSpeak && fullResponse.trim()) {
         speakText(assistantId, fullResponse);
@@ -270,88 +373,157 @@ export default function ChatScreen() {
     );
   }
 
+  function formatConvDate(iso: string) {
+    const d = new Date(iso);
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
   const isMicBusy = isRecording || isTranscribing;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-    >
-      <FlatList
-        ref={flatListRef}
-        data={messages}
-        keyExtractor={(item) => item.id}
-        renderItem={renderMessage}
-        contentContainerStyle={[
-          styles.listContent,
-          messages.length === 0 && styles.listContentEmpty,
-        ]}
-        ListEmptyComponent={renderEmptyState}
-        showsVerticalScrollIndicator={false}
-        onContentSizeChange={scrollToBottom}
-      />
-
-      <View
-        style={[
-          styles.inputRow,
-          { paddingBottom: Math.max(insets.bottom, 12) },
-        ]}
+    <>
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
       >
-        <TouchableOpacity
-          style={[
-            styles.micButton,
-            isRecording && styles.micButtonRecording,
-            isTranscribing && styles.micButtonTranscribing,
+        <FlatList
+          ref={flatListRef}
+          data={messages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          contentContainerStyle={[
+            styles.listContent,
+            messages.length === 0 && styles.listContentEmpty,
           ]}
-          onPressIn={startRecording}
-          onPressOut={stopRecordingAndTranscribe}
-          disabled={isLoading || isTranscribing}
-          activeOpacity={0.7}
-        >
-          {isTranscribing ? (
-            <ActivityIndicator size="small" color={Colors.accent} />
-          ) : (
-            <Text
-              style={[
-                styles.micIcon,
-                isRecording && styles.micIconRecording,
-              ]}
-            >
-              {isRecording ? '⏺' : '🎙'}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TextInput
-          style={styles.textInput}
-          value={inputText}
-          onChangeText={setInputText}
-          placeholder={isMicBusy ? 'Listening…' : 'Message Mirror…'}
-          placeholderTextColor={Colors.placeholder}
-          multiline
-          maxLength={4000}
-          editable={!isMicBusy && !isLoading}
-          returnKeyType="default"
+          ListEmptyComponent={renderEmptyState}
+          showsVerticalScrollIndicator={false}
+          onContentSizeChange={scrollToBottom}
         />
 
-        <TouchableOpacity
+        <View
           style={[
-            styles.sendButton,
-            (!inputText.trim() || isLoading || isMicBusy) && styles.sendButtonDisabled,
+            styles.inputRow,
+            { paddingBottom: Math.max(insets.bottom, 12) },
           ]}
-          onPress={() => sendMessage(inputText)}
-          disabled={!inputText.trim() || isLoading || isMicBusy}
-          activeOpacity={0.8}
         >
-          {isLoading ? (
-            <ActivityIndicator size="small" color="#fff" />
+          <TouchableOpacity
+            style={[
+              styles.micButton,
+              isRecording && styles.micButtonRecording,
+              isTranscribing && styles.micButtonTranscribing,
+            ]}
+            onPressIn={startRecording}
+            onPressOut={stopRecordingAndTranscribe}
+            disabled={isLoading || isTranscribing}
+            activeOpacity={0.7}
+          >
+            {isTranscribing ? (
+              <ActivityIndicator size="small" color={Colors.accent} />
+            ) : (
+              <Text
+                style={[
+                  styles.micIcon,
+                  isRecording && styles.micIconRecording,
+                ]}
+              >
+                {isRecording ? '⏺' : '🎙'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TextInput
+            style={styles.textInput}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder={isMicBusy ? 'Listening…' : 'Message Mirror…'}
+            placeholderTextColor={Colors.placeholder}
+            multiline
+            maxLength={4000}
+            editable={!isMicBusy && !isLoading}
+            returnKeyType="default"
+          />
+
+          <TouchableOpacity
+            style={[
+              styles.sendButton,
+              (!inputText.trim() || isLoading || isMicBusy) && styles.sendButtonDisabled,
+            ]}
+            onPress={() => sendMessage(inputText)}
+            disabled={!inputText.trim() || isLoading || isMicBusy}
+            activeOpacity={0.8}
+          >
+            {isLoading ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.sendIcon}>↑</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+
+      {/* History Modal */}
+      <Modal
+        visible={showHistory}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowHistory(false)}
+      >
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Conversations</Text>
+            <TouchableOpacity
+              onPress={() => setShowHistory(false)}
+              style={styles.modalCloseButton}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modalCloseText}>Done</Text>
+            </TouchableOpacity>
+          </View>
+
+          {loadingHistory ? (
+            <View style={styles.modalLoading}>
+              <ActivityIndicator size="large" color={Colors.accent} />
+            </View>
+          ) : conversations.length === 0 ? (
+            <View style={styles.modalEmpty}>
+              <Text style={styles.modalEmptyText}>No past conversations yet.</Text>
+              <Text style={styles.modalEmptySubtext}>
+                Your chats are saved automatically after each exchange.
+              </Text>
+            </View>
           ) : (
-            <Text style={styles.sendIcon}>↑</Text>
+            <FlatList
+              data={conversations}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.historyList}
+              renderItem={({ item }) => {
+                const preview = item.messages_json[0]?.content?.slice(0, 60) || 'Empty conversation';
+                return (
+                  <TouchableOpacity
+                    style={styles.historyItem}
+                    onPress={() => loadConversation(item)}
+                    activeOpacity={0.75}
+                  >
+                    <View style={styles.historyItemInner}>
+                      <Text style={styles.historyItemTitle} numberOfLines={1}>
+                        {item.title || preview}
+                      </Text>
+                      <Text style={styles.historyItemDate}>
+                        {formatConvDate(item.session_date)}
+                      </Text>
+                    </View>
+                    <Text style={styles.historyItemPreview} numberOfLines={2}>
+                      {preview}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              }}
+            />
           )}
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+    </>
   );
 }
 
@@ -501,5 +673,93 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
     lineHeight: 24,
+  },
+  // History modal
+  modalContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  modalCloseButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  modalCloseText: {
+    fontSize: 16,
+    color: Colors.accent,
+    fontWeight: '600',
+  },
+  modalLoading: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalEmpty: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+  },
+  modalEmptyText: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.text,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalEmptySubtext: {
+    fontSize: 14,
+    color: Colors.muted,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  historyList: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
+  historyItem: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+  },
+  historyItemInner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 6,
+  },
+  historyItemTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text,
+    flex: 1,
+    marginRight: 8,
+  },
+  historyItemDate: {
+    fontSize: 12,
+    color: Colors.muted,
+    flexShrink: 0,
+  },
+  historyItemPreview: {
+    fontSize: 13,
+    color: Colors.muted,
+    lineHeight: 19,
   },
 });
