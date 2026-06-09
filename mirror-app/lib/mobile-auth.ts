@@ -21,7 +21,8 @@ export async function createSupabaseForRequest(request: NextRequest) {
         global: { headers: { Authorization: `Bearer ${bearerToken}` } },
       }
     )
-    const { data: { user } } = await supabase.auth.getUser()
+    // Must pass the token explicitly — getUser() won't read global headers
+    const { data: { user } } = await supabase.auth.getUser(bearerToken)
     return { supabase, user }
   }
 
