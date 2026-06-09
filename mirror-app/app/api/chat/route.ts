@@ -9,6 +9,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { SupabaseClient } from '@supabase/supabase-js'
 import { anthropic, CLAUDE_MODEL } from '@/lib/anthropic'
 import { createSupabaseForRequest } from '@/lib/mobile-auth'
 import { generateEmbedding } from '@/lib/openai'
@@ -18,7 +19,7 @@ import type { VoiceProfileData, Memory } from '@/types'
 const FREE_DAILY_LIMIT = 10
 
 async function countTodayMessages(
-  supabase: ReturnType<typeof createServerClient>,
+  supabase: SupabaseClient,
   userId: string
 ): Promise<number> {
   const todayStart = new Date()
