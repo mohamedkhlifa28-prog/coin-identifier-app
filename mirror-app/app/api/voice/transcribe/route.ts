@@ -2,31 +2,18 @@
  * POST /api/voice/transcribe
  * Transcribes audio using OpenAI Whisper. Used by the mobile app.
  * Accepts multipart/form-data with an "audio" file field.
+ * Supports both cookie auth (web) and Bearer token auth (mobile).
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import OpenAI from 'openai'
+import { createSupabaseForRequest } from '@/lib/mobile-auth'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! })
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => cookieStore.getAll(),
-          setAll: (cs) =>
-            cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)),
-        },
-      }
-    )
-
-    const { data: { user } } = await supabase.auth.getUser()
+    const { user } = await createSupabaseForRequest(request)
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const formData = await request.formData()
@@ -40,7 +27,7 @@ export async function POST(request: NextRequest) {
     const transcription = await openai.audio.transcriptions.create({
       file: audioFile,
       model: 'whisper-1',
-      language: language?.slice(0, 2), // ISO 639-1 code
+      language: language?.slice(0, 2),
     })
 
     return NextResponse.json({ text: transcription.text })

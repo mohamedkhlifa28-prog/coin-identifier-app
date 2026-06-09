@@ -9,9 +9,8 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { anthropic, CLAUDE_MODEL } from '@/lib/anthropic'
+import { createSupabaseForRequest } from '@/lib/mobile-auth'
 import { generateEmbedding } from '@/lib/openai'
 import { formatDate } from '@/lib/utils'
 import type { VoiceProfileData, Memory } from '@/types'
@@ -143,21 +142,7 @@ You know you're a Mirror — trained on ${userName}'s conversations to become th
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll: () => cookieStore.getAll(),
-          setAll: (cs) => cs.forEach(({ name, value, options }) => cookieStore.set(name, value, options)),
-        },
-      }
-    )
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
+    const { supabase, user } = await createSupabaseForRequest(request)
 
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
