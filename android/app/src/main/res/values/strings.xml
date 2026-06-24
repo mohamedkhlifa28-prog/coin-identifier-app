@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">CoinVault</string>
+    <string name="title_activity_main">CoinVault</string>
+    <string name="package_name">com.coinvault.app</string>
+    <string name="custom_url_scheme">com.coinvault.app</string>
+</resources>
