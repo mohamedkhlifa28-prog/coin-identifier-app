@@ -27,11 +27,11 @@ jobs:
         env:
           VITE_REVENUECAT_ANDROID_KEY: ${{ secrets.VITE_REVENUECAT_ANDROID_KEY }}
 
-      - name: Set up Java 17
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: '17'
+          java-version: '21'
 
       - name: Add Android platform (first run only)
         run: npx cap add android 2>/dev/null || true
